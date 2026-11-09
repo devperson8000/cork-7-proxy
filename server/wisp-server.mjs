@@ -240,7 +240,7 @@ async function inspectPlayerBuild() {
 	}
 }
 
-async function servePlayerAsset(pathname, response) {
+async function servePlayerAsset(pathname, request, response) {
 	let relativePath;
 	try {
 		relativePath = decodeURIComponent(pathname.slice(PLAYER_PATH.length + 1));
@@ -432,7 +432,7 @@ const server = http.createServer(async (request, response) => {
 		request.method === "GET" &&
 		(pathname === PLAYER_PATH + "/" || pathname.startsWith(PLAYER_PATH + "/"))
 	) {
-		void servePlayerAsset(pathname, response);
+		void servePlayerAsset(pathname, request, response);
 		return;
 	}
 

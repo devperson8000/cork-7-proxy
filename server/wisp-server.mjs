@@ -656,10 +656,9 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "GET" && pathname === "/health") {
     setHealthCors(request, response, allowedOrigins);
-    const [playerDiagnostics, cork7TlsProbe, wispTlsProbe] = await Promise.all([
+    const [playerDiagnostics, cork7TlsProbe] = await Promise.all([
       inspectPlayerBuild(),
-      probeCork7Tls(),
-      getWispTlsProbe()
+      probeCork7Tls()
     ]);
     response.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
@@ -673,10 +672,26 @@ const server = http.createServer(async (request, response) => {
         playerReady: playerDiagnostics.playerReady,
         playerDiagnostics,
         cork7TlsProbe,
-        wispTlsProbe,
         websocketPath: WISP_PATH
       })
     );
+    return;
+  }
+
+  // Keep the platform health check fast. The Wisp-routed TLS test is a
+  // separate, cached diagnostic endpoint because it can take up to 12s.
+  if (request.method === "GET" && pathname === "/wisp-tls-health") {
+    setHealthCors(request, response, allowedOrigins);
+    const wispTlsProbe = await getWispTlsProbe();
+    response.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store"
+    });
+    response.end(JSON.stringify({
+      status: "ok",
+      service: "cork7-wisp",
+      wispTlsProbe
+    }));
     return;
   }
 

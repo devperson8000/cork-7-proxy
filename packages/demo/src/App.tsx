@@ -3,7 +3,7 @@ import BrowserView from "./pages/BrowserView";
 import { demoSettingsStore } from "./store";
 import { client as WispClient } from "@mercuryworkshop/wisp-js/client";
 
-const HEALTH_URL = "https://p01--cork7--yf5q7tyyggsr.code.run/health";
+const HEALTH_URL = "/c7-health";
 
 function setStatus(id: string, value: string, state: string) {
 	const element = document.getElementById(id);
@@ -24,9 +24,9 @@ async function checkBackend() {
 		const body = await response.json();
 		if (body.status !== "ok") throw new Error("Unexpected health response");
 		if (body.playerReady !== true) {
-			throw new Error("Backend is online, but playerReady is false");
+			throw new Error("Backend build verification failed: " + JSON.stringify(body.playerDiagnostics ?? body));
 		}
-		const detail = `HTTP ${response.status} · playerReady=${String(body.playerReady)} · WS path ${body.websocketPath || "unknown"}`;
+		const detail = `HTTP ${response.status} · build=${body.playerDiagnostics?.buildId || "unknown"} · verified assets present · WS path ${body.websocketPath || "unknown"}`;
 		diagnostics?.set("backend", "ok", detail);
 		setStatus("backend-status", "ONLINE", "ok");
 	} catch (error) {

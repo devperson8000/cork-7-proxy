@@ -63,6 +63,7 @@
 					swControllerAsset: "Controller worker file",
 					injectAsset: "Scramjet inject script",
 					wasmAsset: "Scramjet WASM file",
+					browserApis: "Required browser APIs",
 					serviceWorker: "Browser service worker",
 					swControl: "Page controlled by worker",
 					controller: "Scramjet controller",
@@ -201,6 +202,9 @@
 					if (!statuses.controller) set("controller", "pending", "Waiting for application initialization");
 					if (!statuses.wisp) set("wisp", "pending", "Waiting for Wisp protocol test");
 					if (!statuses.game) set("game", "pending", "Waiting for player frame");
+					var requiredApis = ["fetch", "Promise", "WebSocket", "MessageChannel", "BroadcastChannel", "indexedDB"];
+					var missingApis = requiredApis.filter(function (name) { return !(name in window); });
+					set("browserApis", missingApis.length ? "error" : "ok", missingApis.length ? "Missing: " + missingApis.join(", ") : "fetch · WebSocket · MessageChannel · BroadcastChannel · IndexedDB available");
 					if (!window.isSecureContext) set("serviceWorker", "error", "Service workers require a secure context");
 					else if (!("serviceWorker" in navigator)) set("serviceWorker", "error", "Service workers are unavailable in this browser");
 					else if (!statuses.serviceWorker || statuses.serviceWorker.state === "pending") set("serviceWorker", "pending", "Supported by browser; waiting for registration");
@@ -270,6 +274,7 @@
 				<div class="c7-row" id="c7-check-swControllerAsset" data-state="pending"><span class="c7-name">Controller worker file</span><span class="c7-state">WAIT</span><span class="c7-detail">Checking controller.sw.js</span></div>
 				<div class="c7-row" id="c7-check-injectAsset" data-state="pending"><span class="c7-name">Scramjet inject script</span><span class="c7-state">WAIT</span><span class="c7-detail">Checking controller.inject.js</span></div>
 				<div class="c7-row" id="c7-check-wasmAsset" data-state="pending"><span class="c7-name">Scramjet WASM file</span><span class="c7-state">WAIT</span><span class="c7-detail">Checking scramjet.wasm</span></div>
+				<div class="c7-row" id="c7-check-browserApis" data-state="pending"><span class="c7-name">Required browser APIs</span><span class="c7-state">WAIT</span><span class="c7-detail">Checking browser support</span></div>
 				<div class="c7-row" id="c7-check-serviceWorker" data-state="pending"><span class="c7-name">Browser service worker</span><span class="c7-state">WAIT</span><span class="c7-detail">Waiting for registration</span></div>
 				<div class="c7-row" id="c7-check-swControl" data-state="pending"><span class="c7-name">Page controlled by worker</span><span class="c7-state">WAIT</span><span class="c7-detail">Waiting for controllerchange</span></div>
 				<div class="c7-row" id="c7-check-controller" data-state="pending"><span class="c7-name">Scramjet controller</span><span class="c7-state">WAIT</span><span class="c7-detail">Waiting for initialization</span></div>

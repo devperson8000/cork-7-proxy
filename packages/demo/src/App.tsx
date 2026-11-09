@@ -1,6 +1,7 @@
 import { css, type Component } from "dreamland/core";
 import BrowserView from "./pages/BrowserView";
 import { demoSettingsStore } from "./store";
+import { ClientConnection } from "@mercuryworkshop/wisp-js/client";
 
 const HEALTH_URL = "https://p01--cork7--yf5q7tyyggsr.code.run/health";
 
@@ -29,38 +30,46 @@ async function checkBackend() {
 
 function checkWebSocket() {
 	setStatus("ws-status", "CONNECTING", "pending");
-	let socket: WebSocket;
+	let connection: ClientConnection;
 	try {
-		socket = new WebSocket(demoSettingsStore.wispUrl);
+		// Use the real Wisp client so the v2 subprotocol and INFO/CONTINUE
+		// handshake are tested, rather than only testing a bare WebSocket.
+		connection = new ClientConnection(demoSettingsStore.wispUrl);
 	} catch (error) {
-		console.warn("Cork7 WebSocket could not be created:", error);
+		console.warn("Cork7 Wisp connection could not be created:", error);
 		setStatus("ws-status", "UNAVAILABLE", "error");
 		return;
 	}
 
+	let settled = false;
 	const timeout = window.setTimeout(() => {
+		if (settled) return;
+		settled = true;
 		setStatus("ws-status", "TIMEOUT", "error");
-		socket.close();
+		connection.close();
 	}, 8000);
 
-	socket.addEventListener(
-		"open",
-		() => {
-			window.clearTimeout(timeout);
-			setStatus("ws-status", "CONNECTED", "ok");
-			socket.close(1000, "Cork7 connection check complete");
-		},
-		{ once: true }
-	);
+	connection.onopen = () => {
+		if (settled) return;
+		settled = true;
+		window.clearTimeout(timeout);
+		setStatus("ws-status", "CONNECTED", "ok");
+		connection.close();
+	};
 
-	socket.addEventListener(
-		"error",
-		() => {
-			window.clearTimeout(timeout);
-			setStatus("ws-status", "CHECK CONNECTION", "error");
-		},
-		{ once: true }
-	);
+	connection.onerror = () => {
+		if (settled) return;
+		settled = true;
+		window.clearTimeout(timeout);
+		setStatus("ws-status", "HANDSHAKE FAILED", "error");
+	};
+
+	connection.onclose = () => {
+		if (settled) return;
+		settled = true;
+		window.clearTimeout(timeout);
+		setStatus("ws-status", "CONNECTION CLOSED", "error");
+	};
 }
 
 const App: Component = function (cx) {

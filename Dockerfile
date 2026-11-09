@@ -11,21 +11,27 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Debian Bookworm's packaged Binaryen is too old for the global-effects
-# optimizer pass used by Scramjet's release rewriter. Pin an official release
-# and verify the downloaded archive before using it.
+# optimizer pass used by Scramjet's release rewriter. Download the pinned
+# official release through GitHub's release-asset API (not the browser
+# /releases/download endpoint, which was returning HTTP 504), then verify it.
 ARG TARGETARCH
 RUN set -eux; \
     case "${TARGETARCH:-amd64}" in \
       amd64) \
-        BINARYEN_ARCH="x86_64"; \
+        BINARYEN_ASSET_ID="580050094"; \
         BINARYEN_SHA256="2dc9c7813f5375db93d96ead4b78222fcc3e2677bbb832297af4797782a37489" ;; \
       arm64) \
-        BINARYEN_ARCH="aarch64"; \
+        BINARYEN_ASSET_ID="580038503"; \
         BINARYEN_SHA256="89c07ea56faf38d0fbec36ca8ec0721756716185f265b568e133d427f299bf8" ;; \
       *) echo "Unsupported TARGETARCH: ${TARGETARCH}"; exit 1 ;; \
     esac; \
-    BINARYEN_VERSION="133"; \
-    curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-${BINARYEN_ARCH}-linux.tar.gz" -o /tmp/binaryen.tar.gz; \
+    curl --fail --location --show-error \
+      --retry 8 --retry-all-errors --retry-delay 3 --retry-max-time 300 \
+      --connect-timeout 30 --max-time 600 \
+      --header "Accept: application/octet-stream" \
+      --header "X-GitHub-Api-Version: 2022-11-28" \
+      --output /tmp/binaryen.tar.gz \
+      "https://api.github.com/repos/WebAssembly/binaryen/releases/assets/${BINARYEN_ASSET_ID}"; \
     echo "${BINARYEN_SHA256}  /tmp/binaryen.tar.gz" | sha256sum -c -; \
     mkdir -p /opt/binaryen; \
     tar -xzf /tmp/binaryen.tar.gz --strip-components=1 -C /opt/binaryen; \

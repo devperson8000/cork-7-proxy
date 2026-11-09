@@ -36,17 +36,30 @@ const BrowserView: Component<
 	}
 > = function (cx) {
 	cx.mount = async () => {
+		const diagnostics = (window as any).C7Diagnostics;
+		diagnostics?.set("game", "pending", "Waiting for Scramjet controller before creating game frame");
 		try {
 			const controller = await controllerReady;
+			diagnostics?.set("game", "pending", "Controller ready; creating Cork7 frame");
 			const frame: Frame = controller.createFrame(this.frameel);
 			const target = getSafeInitialUrl();
 
 			const status = document.getElementById("game-status");
 			if (status) status.textContent = "CONNECTING TO CORK7";
-			const navigate = () => frame.go(target);
+			const navigate = () => {
+				diagnostics?.set("game", "pending", "Navigating to the fixed official Cork7 homepage");
+				diagnostics?.log("Starting game frame navigation to " + target);
+				frame.go(target);
+				this.frameel.addEventListener("load", () => {
+					diagnostics?.set("game", "ok", "Game frame emitted a load event after navigation");
+				}, { once: true });
+			};
 			this.frameel.addEventListener("load", navigate, { once: true });
 			this.frameel.src = "about:blank";
 		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			diagnostics?.set("game", "error", message);
+			diagnostics?.log("Game frame initialization failed: " + message);
 			console.error("Could not start the Cork7 frame:", error);
 			const status = document.getElementById("game-status");
 			if (status) status.textContent = "PLAYER INIT FAILED";

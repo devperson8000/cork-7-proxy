@@ -221,8 +221,10 @@
 						navigator.serviceWorker.addEventListener("message", function (event) {
 							var data = event.data || {};
 							if (data.c7Diagnostic && data.c7Diagnostic.error) {
-								set("game", "error", data.c7Diagnostic.error);
-								log("SERVICE WORKER ERROR: " + data.c7Diagnostic.error);
+								var detail = data.c7Diagnostic.error;
+								if (data.c7Diagnostic.request) detail += " · " + data.c7Diagnostic.request;
+								set("game", "error", detail);
+								log("SERVICE WORKER ERROR: " + detail);
 							}
 						});
 						if (navigator.serviceWorker.controller) {

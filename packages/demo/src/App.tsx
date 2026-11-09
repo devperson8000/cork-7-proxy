@@ -23,7 +23,7 @@ async function checkBackend() {
 		if (!response.ok) throw new Error(`Health check returned HTTP ${response.status}`);
 		const body = await response.json();
 		if (body.status !== "ok") throw new Error("Unexpected health response");
-		if (body.playerReady === false) {
+		if (body.playerReady !== true) {
 			throw new Error("Backend is online, but playerReady is false");
 		}
 		const detail = `HTTP ${response.status} · playerReady=${String(body.playerReady)} · WS path ${body.websocketPath || "unknown"}`;

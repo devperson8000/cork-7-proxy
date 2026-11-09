@@ -212,7 +212,7 @@ wisp.options.stream_limit_per_host = 16;
 wisp.options.stream_limit_total = 64;
 wisp.options.wisp_version = 2;
 
-logging.set_level(logging.WARN);
+logging.set_level(logging.INFO);
 
 let activeWsConnections = 0;
 
@@ -271,6 +271,7 @@ const server = http.createServer((request, response) => {
 server.on("upgrade", (request, socket, head) => {
   // Only the dedicated Wisp endpoint accepts WebSocket upgrades.
   if (request.url !== WISP_PATH) {
+    console.warn(`Rejected WebSocket upgrade for path "${request.url}"; expected "${WISP_PATH}".`);
     rejectUpgrade(socket, 404, "Not Found");
     return;
   }
@@ -286,6 +287,7 @@ server.on("upgrade", (request, socket, head) => {
   }
 
   if (!origin || !allowedOrigins.has(origin)) {
+    console.warn(`Rejected Wisp upgrade: origin "${originHeader ?? "(missing)"}" is not allowed.`);
     rejectUpgrade(socket, 403, "Forbidden");
     return;
   }
@@ -296,6 +298,9 @@ server.on("upgrade", (request, socket, head) => {
   }
 
   activeWsConnections += 1;
+  console.info(
+    `Accepted Wisp upgrade from ${origin}; protocol=${request.headers["sec-websocket-protocol"] ?? "(none)"}; active=${activeWsConnections}`
+  );
   let counted = true;
   const releaseConnection = () => {
     if (!counted) return;

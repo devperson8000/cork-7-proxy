@@ -82,17 +82,17 @@ async function init(): Promise<InstanceType<typeof Controller>> {
 		await waitForControllerOrReady(10000);
 
 		const readySw = navigator.serviceWorker.controller ?? registration.active;
-		diagnostics?.set(
-			"swControl",
-			navigator.serviceWorker.controller ? "ok" : "warn",
-			navigator.serviceWorker.controller
-				? "This page is controlled by the /c7/ service worker"
-				: "No controller on this document yet; using active registration worker"
-		);
 		if (!readySw) {
 			diagnostics?.set("swControl", "error", "Registration has no active service worker");
 			throw new Error("No active service worker is available.");
 		}
+		diagnostics?.set(
+			"swControl",
+			"pending",
+			navigator.serviceWorker.controller
+				? "Document is controlled by /c7/ worker; verifying Scramjet RPC"
+				: "Active /c7/ registration worker found; verifying Scramjet RPC"
+		);
 
 		diagnostics?.set("controller", "pending", "Creating Scramjet controller and loading WASM");
 		controller = new Controller({
@@ -109,6 +109,13 @@ async function init(): Promise<InstanceType<typeof Controller>> {
 
 		await withTimeout(controller.wait(), 20000, "Scramjet controller startup");
 		diagnostics?.set("controller", "ok", "Controller ready · WASM fetched · service-worker RPC responded");
+		diagnostics?.set(
+			"swControl",
+			"ok",
+			navigator.serviceWorker.controller
+				? "Document controlled by /c7/ service worker · Scramjet RPC verified"
+				: "Active /c7/ registration worker verified · Scramjet RPC responded"
+		);
 		diagnostics?.log("Scramjet controller startup completed.");
 		return controller;
 	} catch (error) {

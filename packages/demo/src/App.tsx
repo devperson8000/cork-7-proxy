@@ -1,7 +1,7 @@
 import { css, type Component } from "dreamland/core";
 import BrowserView from "./pages/BrowserView";
 import { demoSettingsStore } from "./store";
-import { ClientConnection } from "@mercuryworkshop/wisp-js/client";
+import { client as WispClient } from "@mercuryworkshop/wisp-js/client";
 
 const HEALTH_URL = "https://p01--cork7--yf5q7tyyggsr.code.run/health";
 
@@ -34,7 +34,7 @@ function checkWebSocket() {
 	try {
 		// Use the real Wisp client so the v2 subprotocol and INFO/CONTINUE
 		// handshake are tested, rather than only testing a bare WebSocket.
-		connection = new ClientConnection(demoSettingsStore.wispUrl);
+		connection = new WispClient.ClientConnection(demoSettingsStore.wispUrl);
 	} catch (error) {
 		console.warn("Cork7 Wisp connection could not be created:", error);
 		setStatus("ws-status", "UNAVAILABLE", "error");

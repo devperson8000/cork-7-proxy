@@ -1,5 +1,4 @@
 import App from "./App";
-import LibcurlClient from "@mercuryworkshop/libcurl-transport";
 import EpoxyClient from "@mercuryworkshop/epoxy-transport";
 import { defaultConfig } from "@mercuryworkshop/scramjet";
 import { Controller } from "@mercuryworkshop/scramjet-controller";
@@ -15,15 +14,11 @@ diagnostics?.log("Application module entrypoint executed.");
 let controller: InstanceType<typeof Controller>;
 const cachePlugin = new HttpCachePlugin();
 
-export function getTransport(): LibcurlClient | EpoxyClient {
+export function getTransport(): EpoxyClient {
 	const wispUrl = demoSettingsStore.wispUrl;
-	switch (demoSettingsStore.transport) {
-		case "epoxy":
-			return new EpoxyClient({ wisp: wispUrl });
-		case "libcurl":
-		default:
-			return new LibcurlClient({ wisp: wispUrl });
-	}
+	diagnostics?.set("transport", "ok", "Epoxy TLS transport selected");
+	diagnostics?.log("Using Epoxy TLS transport for the Cork7 connection.");
+	return new EpoxyClient({ wisp: wispUrl });
 }
 
 async function waitForControllerOrReady(timeoutMs = 10000): Promise<void> {

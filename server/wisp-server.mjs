@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
+import tls from "node:tls";
 import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 
 const HOST = "0.0.0.0";
@@ -14,6 +15,7 @@ const APP_ROOT = path.resolve(SERVER_DIR, "..");
 const STATIC_ROOT = path.join(APP_ROOT, "packages", "demo", "dist");
 const PLAYER_INDEX = path.join(STATIC_ROOT, "index.html");
 const EXPECTED_PLAYER_BUILD = "c7-diagnostics-2026-11-09-1";
+const CORK7_TLS_HOST = "cork7.com";
 const DEFAULT_ALLOWED_HOSTS =
   "cork7.com,www.cork7.com,live.cork7.com";
 const DEFAULT_ALLOWED_ORIGINS = "https://cork7game.vercel.app";
@@ -133,20 +135,103 @@ function setHealthCors(request, response, allowedOrigins) {
 }
 
 
+function readHtmlAttribute(tag, name) {
+  const attributes = /([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g;
+  for (const match of tag.matchAll(attributes)) {
+    if (match[1].toLowerCase() === name.toLowerCase()) {
+      return match[2] ?? match[3] ?? match[4] ?? null;
+    }
+  }
+  return null;
+}
+
+function probeCork7Tls(timeoutMs = 5000) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let socket;
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      if (socket && !socket.destroyed) socket.destroy();
+      resolve(result);
+    };
+
+    socket = tls.connect({
+      host: CORK7_TLS_HOST,
+      port: 443,
+      servername: CORK7_TLS_HOST,
+      rejectUnauthorized: true
+    });
+
+    socket.setTimeout(timeoutMs, () => {
+      finish({
+        ok: false,
+        code: "ETIMEDOUT",
+        error: "TLS connection to " + CORK7_TLS_HOST + ":443 timed out after " + timeoutMs + "ms"
+      });
+    });
+
+    socket.once("secureConnect", () => {
+      finish({
+        ok: socket.authorized === true,
+        protocol: socket.getProtocol(),
+        authorized: socket.authorized,
+        authorizationError: socket.authorizationError ?? null
+      });
+    });
+
+    socket.once("error", (error) => {
+      finish({
+        ok: false,
+        code: error.code ?? null,
+        error: error.message
+      });
+    });
+  });
+}
+
 async function inspectPlayerBuild() {
   try {
     const html = await fs.readFile(PLAYER_INDEX, "utf8");
-    const buildId = html.match(/<meta\s+name=["']c7-build["']\s+content=["']([^"']+)["']/i)?.[1] ?? null;
+    const metaTags = html.match(/<meta\b[^>]*>/gi) ?? [];
+    const buildMeta = metaTags.find(
+      (tag) => readHtmlAttribute(tag, "name")?.toLowerCase() === "c7-build"
+    );
+    const buildId =
+      readHtmlAttribute(buildMeta ?? "", "content") ??
+      (html.includes("C7 // RUNTIME DIAGNOSTICS · " + EXPECTED_PLAYER_BUILD)
+        ? EXPECTED_PLAYER_BUILD
+        : null);
     const diagnosticsPanelPresent = html.includes('id="c7-diagnostics"');
-    const moduleTag = html.match(/<script\b(?=[^>]*\btype=["']module["'])[^>]*>/i)?.[0] ?? "";
-    const moduleSrc = moduleTag.match(/\bsrc=["']([^"']+)["']/i)?.[1] ?? null;
+
+    const scriptTags = html.match(/<script\b[^>]*>/gi) ?? [];
+    const moduleTag = scriptTags.find(
+      (tag) => readHtmlAttribute(tag, "type")?.toLowerCase() === "module"
+    );
+    let moduleSrc = readHtmlAttribute(moduleTag ?? "", "src");
+
+    if (!moduleSrc) {
+      const bundledScript = scriptTags.find((tag) => {
+        const src = readHtmlAttribute(tag, "src");
+        return src && /(?:^|\/)assets\/[^/]+\.js(?:[?#].*)?$/i.test(src);
+      });
+      moduleSrc = readHtmlAttribute(bundledScript ?? "", "src");
+    }
+
     let moduleAssetPresent = false;
     let moduleAsset = null;
 
     if (moduleSrc) {
-      const moduleUrl = new URL(moduleSrc, "http://localhost");
-      if (moduleUrl.pathname.startsWith(PLAYER_PATH + "/")) {
-        const relative = decodeURIComponent(moduleUrl.pathname.slice(PLAYER_PATH.length + 1));
+      const pageUrl = new URL(PLAYER_PATH + "/", "http://localhost");
+      const moduleUrl = new URL(moduleSrc, pageUrl);
+      if (
+        moduleUrl.origin === pageUrl.origin &&
+        moduleUrl.pathname.startsWith(PLAYER_PATH + "/")
+      ) {
+        const relative = decodeURIComponent(
+          moduleUrl.pathname.slice(PLAYER_PATH.length + 1)
+        );
         const resolved = path.resolve(STATIC_ROOT, relative);
         if (resolved.startsWith(STATIC_ROOT + path.sep)) {
           moduleAsset = relative;
@@ -176,7 +261,10 @@ async function inspectPlayerBuild() {
     return {
       buildId,
       expectedBuildId: EXPECTED_PLAYER_BUILD,
+      buildMetaFound: Boolean(buildMeta),
       diagnosticsPanelPresent,
+      moduleSrc,
+      moduleTagFound: Boolean(moduleTag),
       moduleAsset,
       moduleAssetPresent,
       missingAssets,
@@ -187,7 +275,10 @@ async function inspectPlayerBuild() {
     return {
       buildId: null,
       expectedBuildId: EXPECTED_PLAYER_BUILD,
+      buildMetaFound: false,
       diagnosticsPanelPresent: false,
+      moduleSrc: null,
+      moduleTagFound: false,
       moduleAsset: null,
       moduleAssetPresent: false,
       missingAssets: ["index.html or player build could not be inspected"],
@@ -196,7 +287,6 @@ async function inspectPlayerBuild() {
     };
   }
 }
-
 async function servePlayerAsset(pathname, response) {
   let relativePath;
   try {
@@ -295,7 +385,10 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "GET" && pathname === "/health") {
     setHealthCors(request, response, allowedOrigins);
-    const playerDiagnostics = await inspectPlayerBuild();
+    const [playerDiagnostics, cork7TlsProbe] = await Promise.all([
+      inspectPlayerBuild(),
+      probeCork7Tls()
+    ]);
     response.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store"
@@ -307,6 +400,7 @@ const server = http.createServer(async (request, response) => {
         player: "/c7/",
         playerReady: playerDiagnostics.playerReady,
         playerDiagnostics,
+        cork7TlsProbe,
         websocketPath: WISP_PATH
       })
     );

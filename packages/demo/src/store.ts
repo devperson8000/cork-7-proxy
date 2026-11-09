@@ -13,7 +13,7 @@ export const AVAILABLE_TRANSPORTS: ReadonlyArray<{
 const DEFAULT_WISP_URL =
 	import.meta.env.VITE_WISP_URL ||
 	"wss://p01--cork7--yf5q7tyyggsr.code.run/wisp/";
-const DEFAULT_TRANSPORT: AvailableTransports = "libcurl";
+const DEFAULT_TRANSPORT: AvailableTransports = "epoxy";
 const DEFAULT_HOME_URL = "https://cork7.com/";
 const DEFAULT_MAX_REQUESTS = 200;
 

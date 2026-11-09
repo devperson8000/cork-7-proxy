@@ -1,219 +1,230 @@
-import { css, createDelegate, type Component } from "dreamland/core";
-import type { Frame } from "@mercuryworkshop/scramjet-controller";
-import FlagEditor from "./components/FlagEditor";
+import { css, type Component } from "dreamland/core";
 import BrowserView from "./pages/BrowserView";
-import RequestViewer from "./pages/RequestViewer";
-import PlaygroundView from "./pages/Playground";
-import SettingsView from "./pages/SettingsPage";
-import { Omnibox } from "./pages/BrowserView";
-import { requestsState } from "./pages/RequestViewer";
+import { demoSettingsStore } from "./store";
 
-const App: Component<
-	{},
-	{},
-	{
-		activeTab: "browser" | "requests" | "playground" | "settings";
+const HEALTH_URL = "https://p01--cork7--yf5q7tyyggsr.code.run/health";
+
+function setStatus(id: string, value: string, state: string) {
+	const element = document.getElementById(id);
+	if (!element) return;
+	element.textContent = value;
+	element.setAttribute("data-state", state);
+}
+
+async function checkBackend() {
+	try {
+		const response = await fetch(HEALTH_URL, {
+			cache: "no-store",
+			mode: "cors",
+		});
+		if (!response.ok) throw new Error(`Health check returned ${response.status}`);
+		const body = await response.json();
+		if (body.status !== "ok") throw new Error("Unexpected health response");
+		setStatus("backend-status", "ONLINE", "ok");
+	} catch (error) {
+		console.warn("Cork7 backend health check failed:", error);
+		setStatus("backend-status", "CHECK CONNECTION", "error");
 	}
-> = function (cx) {
-	this.activeTab ??= "browser";
+}
+
+function checkWebSocket() {
+	setStatus("ws-status", "CONNECTING", "pending");
+	let socket: WebSocket;
+	try {
+		socket = new WebSocket(demoSettingsStore.wispUrl);
+	} catch (error) {
+		console.warn("Cork7 WebSocket could not be created:", error);
+		setStatus("ws-status", "UNAVAILABLE", "error");
+		return;
+	}
+
+	const timeout = window.setTimeout(() => {
+		setStatus("ws-status", "TIMEOUT", "error");
+		socket.close();
+	}, 8000);
+
+	socket.addEventListener(
+		"open",
+		() => {
+			window.clearTimeout(timeout);
+			setStatus("ws-status", "CONNECTED", "ok");
+			socket.close(1000, "Cork7 connection check complete");
+		},
+		{ once: true }
+	);
+
+	socket.addEventListener(
+		"error",
+		() => {
+			window.clearTimeout(timeout);
+			setStatus("ws-status", "CHECK CONNECTION", "error");
+		},
+		{ once: true }
+	);
+}
+
+const App: Component = function (cx) {
+	cx.mount = () => {
+		void checkBackend();
+		checkWebSocket();
+	};
+
 	return (
-		<div>
-			<div class="top-bar">
-				<div class="tab-bar">
-					<button
-						class={use(this.activeTab).map(
-							(tab) => `tab-button ${tab === "browser" ? "active" : ""}`
-						)}
-						on:click={() => {
-							this.activeTab = "browser";
-						}}
-					>
-						Browser
-					</button>
-					<button
-						class={use(this.activeTab).map(
-							(tab) => `tab-button ${tab === "requests" ? "active" : ""}`
-						)}
-						on:click={() => {
-							this.activeTab = "requests";
-						}}
-					>
-						Requests{" "}
-						{use(requestsState.requests).map((requests) =>
-							requests.length ? `(${requests.length})` : ""
-						)}
-					</button>
-					<button
-						class={use(this.activeTab).map(
-							(tab) => `tab-button ${tab === "playground" ? "active" : ""}`
-						)}
-						on:click={() => {
-							this.activeTab = "playground";
-						}}
-					>
-						Playground
-					</button>
-					<button
-						class={use(this.activeTab).map(
-							(tab) => `tab-button ${tab === "settings" ? "active" : ""}`
-						)}
-						on:click={() => {
-							this.activeTab = "settings";
-						}}
-					>
-						Settings
-					</button>
-					{use(this.activeTab)
-						.map((tab) => tab === "browser")
-						.andThen(<Omnibox />)}
+		<main class="player-shell">
+			<header class="topbar">
+				<div class="brand">
+					<span class="brand-mark">C7</span>
+					<div>
+						<div class="brand-title">CORK7</div>
+						<div class="brand-subtitle">DEDICATED GAME SESSION</div>
+					</div>
 				</div>
-				<div class="top-actions">
-					<FlagEditor inline={true} />
+				<div class="connection-status">
+					<div class="status-item">
+						<span class="status-label">BACKEND</span>
+						<strong id="backend-status" data-state="pending">CHECKING</strong>
+					</div>
+					<div class="status-item">
+						<span class="status-label">WSS</span>
+						<strong id="ws-status" data-state="pending">CHECKING</strong>
+					</div>
 				</div>
-			</div>
-			<div
-				class={use(this.activeTab).map(
-					(tab) =>
-						`tab-panel browser-panel ${tab === "browser" ? "active" : ""}`
-				)}
-			>
-				<BrowserView
-					active={use(this.activeTab).map((tab) => tab === "browser")}
-				/>
-			</div>
-			<div
-				class={use(this.activeTab).map(
-					(tab) =>
-						`tab-panel requests-panel ${tab === "requests" ? "active" : ""}`
-				)}
-			>
-				<RequestViewer
-					active={use(this.activeTab).map((tab) => tab === "requests")}
-				/>
-			</div>
-			<div
-				class={use(this.activeTab).map(
-					(tab) =>
-						`tab-panel playground-panel ${tab === "playground" ? "active" : ""}`
-				)}
-			>
-				<PlaygroundView
-					active={use(this.activeTab).map((tab) => tab === "playground")}
-				/>
-			</div>
-			<div
-				class={use(this.activeTab).map(
-					(tab) =>
-						`tab-panel settings-tab ${tab === "settings" ? "active" : ""}`
-				)}
-			>
-				<SettingsView />
-			</div>
-		</div>
+			</header>
+			<section class="player-content">
+				<div class="game-label">
+					<span>GAME</span>
+					<strong id="game-status">LOADING CORK7</strong>
+					<a href="https://cork7.com/" target="_blank" rel="noopener noreferrer">OPEN OFFICIAL GAME</a>
+				</div>
+				<BrowserView />
+			</section>
+			<footer class="footer">
+				<span>ONE GAME · FIXED DESTINATION</span>
+				<span>CONNECTION STATUS IS SHOWN ABOVE</span>
+			</footer>
+		</main>
 	);
 };
 
 App.style = css`
-	@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0");
-
 	:scope {
-		width: 100vw;
-		height: 100vh;
-		display: flex;
-		flex-direction: column;
-		margin: 0;
-		overflow: hidden;
-		position: absolute;
-		top: 0;
-		left: 0;
-
-		padding: 0;
-		background: black;
+		position: fixed;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		min-height: 100vh;
 		box-sizing: border-box;
-	}
-	.material-symbols-outlined {
-		font-family: "Material Symbols Outlined";
-		font-weight: normal;
-		font-style: normal;
-		font-size: 11px;
-		line-height: 1;
-		letter-spacing: normal;
-		text-transform: none;
-		display: inline-block;
-		white-space: nowrap;
-		word-wrap: normal;
-		direction: ltr;
-		-webkit-font-smoothing: antialiased;
-	}
-	.top-bar {
+		background: #080b10;
+		color: #edf2f7;
+		font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 		display: flex;
-		align-items: stretch;
-		gap: 0;
-		margin-bottom: 0;
-		border-bottom: 1px solid #4a4a4a;
-		background: #0f0f0f;
-	}
-	.tab-bar {
-		display: flex;
-		flex: 1;
-		align-items: stretch;
-		gap: 0;
-	}
-	.tab-button {
-		border: 1px solid transparent;
-		border-bottom: 0;
-		background: transparent;
-		color: #a8a8a8;
-		padding: 0.24em 0.62em;
-		border-radius: 0;
-		cursor: pointer;
-		font-size: 0.84em;
-		line-height: 1.2;
-		min-height: 28px;
-		margin: 0;
-		white-space: nowrap;
-		display: inline-flex;
-		align-items: center;
-	}
-	.tab-button:hover {
-		background: #181818;
-		color: #d0d0d0;
-	}
-	.tab-button.active {
-		background: #1f1f1f;
-		color: #fff;
-		border-color: #4a4a4a;
-		margin-bottom: -1px;
-	}
-	.top-actions {
-		display: flex;
-		align-items: center;
-		margin-left: auto;
-		padding: 0 0.35em;
-		min-height: 28px;
-	}
-	.tab-panel {
-		flex: 1;
-		width: 100%;
-		min-width: 0;
-		min-height: 0;
-		display: none;
-	}
-	.tab-panel.active {
-		display: flex;
-	}
-	.requests-panel {
 		flex-direction: column;
 	}
-	.playground-panel {
-		width: 100%;
-		min-width: 0;
-		min-height: 0;
+	.topbar {
+		min-height: 66px;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 18px;
+		padding: 0 22px;
+		border-bottom: 1px solid #202a36;
+		background: #0d131c;
 	}
-	.settings-tab {
-		width: 100%;
-		min-width: 0;
+	.brand {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+	}
+	.brand-mark {
+		width: 38px;
+		height: 38px;
+		display: grid;
+		place-items: center;
+		border: 1px solid #7db8ae;
+		border-radius: 9px;
+		color: #a8e3d6;
+		font-weight: 800;
+		letter-spacing: -1px;
+	}
+	.brand-title {
+		font-size: 13px;
+		font-weight: 800;
+		letter-spacing: .18em;
+	}
+	.brand-subtitle, .status-label, .game-label > span, .footer {
+		color: #8292a5;
+		font-size: 9px;
+		font-weight: 700;
+		letter-spacing: .14em;
+	}
+	.brand-subtitle { margin-top: 3px; }
+	.connection-status {
+		display: flex;
+		align-items: center;
+		gap: 20px;
+	}
+	.status-item {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		min-width: 96px;
+	}
+	.status-item strong {
+		font-size: 10px;
+		letter-spacing: .1em;
+		color: #d3dbe5;
+	}
+	.status-item strong[data-state="ok"] { color: #83d8a4; }
+	.status-item strong[data-state="error"] { color: #f0a0a0; }
+	.player-content {
+		flex: 1;
 		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		padding: 12px 16px 10px;
+		gap: 10px;
+	}
+	.game-label {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		font-size: 10px;
+	}
+	.game-label strong {
+		font-size: 10px;
+		letter-spacing: .08em;
+		color: #e5edf5;
+	}
+	.game-label a {
+		margin-left: auto;
+		color: #91cfc2;
+		text-decoration: none;
+		font-size: 10px;
+	}
+	.game-label a:hover { text-decoration: underline; }
+	.game-frame {
+		flex: 1;
+		min-height: 0;
+		border: 1px solid #263342;
+		border-radius: 10px;
+		overflow: hidden;
+		background: #05080c;
+	}
+	.footer {
+		min-height: 28px;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 0 22px;
+		border-top: 1px solid #18222d;
+	}
+	@media (max-width: 600px) {
+		.topbar { padding: 0 12px; min-height: 60px; }
+		.connection-status { gap: 10px; }
+		.status-item { min-width: 70px; }
+		.player-content { padding: 8px; }
+		.footer { padding: 0 10px; font-size: 8px; letter-spacing: .08em; }
 	}
 `;
+
 export default App;

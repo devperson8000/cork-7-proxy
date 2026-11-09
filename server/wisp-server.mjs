@@ -1,10 +1,31 @@
 import http from "node:http";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 
 const HOST = "0.0.0.0";
 const WISP_PATH = "/wisp/";
-const DEFAULT_ALLOWED_HOSTS = "cork7.com,www.cork7.com";
+const PLAYER_PATH = "/c7";
+const STATIC_ROOT = path.resolve("packages/demo/dist");
+const DEFAULT_ALLOWED_HOSTS =
+  "cork7.com,www.cork7.com,live.cork7.com";
 const DEFAULT_ALLOWED_ORIGINS = "https://cork7game.vercel.app";
+const MIME_TYPES = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "application/javascript; charset=utf-8",
+  ".mjs": "application/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".wasm": "application/wasm",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".txt": "text/plain; charset=utf-8"
+};
 
 function parseCsv(value, variableName) {
   const entries = String(value ?? "")
@@ -54,7 +75,9 @@ function normalizeOrigin(value) {
     url.search ||
     url.hash
   ) {
-    throw new Error(`Invalid browser origin: "${value}". Supply an HTTPS origin only, such as https://example.com.`);
+    throw new Error(
+      `Invalid browser origin: "${value}". Supply an HTTPS origin only, such as https://example.com.`
+    );
   }
 
   return url.origin;
@@ -87,6 +110,72 @@ function rejectUpgrade(socket, status, reason) {
   );
 }
 
+function setHealthCors(request, response, allowedOrigins) {
+  const requestOrigin = request.headers.origin;
+  if (typeof requestOrigin !== "string") return;
+
+  try {
+    const origin = normalizeOrigin(requestOrigin);
+    if (allowedOrigins.has(origin)) {
+      response.setHeader("Access-Control-Allow-Origin", origin);
+      response.setHeader("Vary", "Origin");
+    }
+  } catch {
+    // Invalid or non-HTTPS browser origins receive no CORS permission.
+  }
+}
+
+async function servePlayerAsset(pathname, response) {
+  let relativePath;
+  try {
+    relativePath = decodeURIComponent(pathname.slice(PLAYER_PATH.length + 1));
+  } catch {
+    response.writeHead(400, { "Cache-Control": "no-store" });
+    response.end("Invalid path");
+    return;
+  }
+
+  if (!relativePath || relativePath === "/") {
+    relativePath = "index.html";
+  }
+
+  const requestedPath = path.resolve(STATIC_ROOT, relativePath);
+  if (
+    requestedPath !== STATIC_ROOT &&
+    !requestedPath.startsWith(STATIC_ROOT + path.sep)
+  ) {
+    response.writeHead(403, { "Cache-Control": "no-store" });
+    response.end("Forbidden");
+    return;
+  }
+
+  try {
+    let filePath = requestedPath;
+    let info = await fs.stat(filePath);
+    if (info.isDirectory()) {
+      filePath = path.join(filePath, "index.html");
+      info = await fs.stat(filePath);
+    }
+
+    if (!info.isFile()) throw new Error("Not a file");
+
+    const extension = path.extname(filePath).toLowerCase();
+    response.writeHead(200, {
+      "Content-Type": MIME_TYPES[extension] ?? "application/octet-stream",
+      "Content-Length": info.size,
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff"
+    });
+    response.end(await fs.readFile(filePath));
+  } catch {
+    response.writeHead(404, {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-store"
+    });
+    response.end("Player asset not found");
+  }
+}
+
 const allowedHosts = parseAllowedHosts(
   process.env.CORK7_ALLOWED_HOSTS ?? DEFAULT_ALLOWED_HOSTS
 );
@@ -100,20 +189,20 @@ const maxWsConnections = readPositiveInteger(
   60
 );
 
-// Restrict the Wisp server to the exact game hostnames and web ports.
+// Restrict Wisp to exact Cork7 hostnames and standard web ports.
 wisp.options.hostname_whitelist = allowedHosts.map(
   (host) => new RegExp(`^${host.replaceAll(".", "\\.")}$`, "i")
 );
 wisp.options.port_whitelist = [80, 443];
 
-// Explicitly block direct-IP, private-network, loopback, and UDP destinations.
+// Do not permit direct IP, private-network, loopback, or UDP destinations.
 wisp.options.allow_direct_ip = false;
 wisp.options.allow_private_ips = false;
 wisp.options.allow_loopback_ips = false;
 wisp.options.allow_udp_streams = false;
 wisp.options.allow_tcp_streams = true;
 
-// Bound resource use for each connected browser session.
+// Per-connection resource limits.
 wisp.options.stream_limit_per_host = 16;
 wisp.options.stream_limit_total = 64;
 wisp.options.wisp_version = 2;
@@ -123,9 +212,17 @@ logging.set_level(logging.WARN);
 let activeWsConnections = 0;
 
 const server = http.createServer((request, response) => {
-  const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
+  let pathname;
+  try {
+    pathname = new URL(request.url ?? "/", "http://localhost").pathname;
+  } catch {
+    response.writeHead(400, { "Cache-Control": "no-store" });
+    response.end("Bad request");
+    return;
+  }
 
   if (request.method === "GET" && pathname === "/health") {
+    setHealthCors(request, response, allowedOrigins);
     response.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store"
@@ -134,9 +231,27 @@ const server = http.createServer((request, response) => {
       JSON.stringify({
         status: "ok",
         service: "cork7-wisp",
+        player: "/c7/",
         websocketPath: WISP_PATH
       })
     );
+    return;
+  }
+
+  if (request.method === "GET" && pathname === PLAYER_PATH) {
+    response.writeHead(308, {
+      Location: PLAYER_PATH + "/",
+      "Cache-Control": "no-store"
+    });
+    response.end();
+    return;
+  }
+
+  if (
+    request.method === "GET" &&
+    (pathname === PLAYER_PATH + "/" || pathname.startsWith(PLAYER_PATH + "/"))
+  ) {
+    void servePlayerAsset(pathname, response);
     return;
   }
 
@@ -148,8 +263,7 @@ const server = http.createServer((request, response) => {
 });
 
 server.on("upgrade", (request, socket, head) => {
-  // Compare the raw request target too: Wisp selects its protocol from the
-  // trailing slash, so query strings or alternate paths must not be accepted.
+  // Only the dedicated Wisp endpoint accepts WebSocket upgrades.
   if (request.url !== WISP_PATH) {
     rejectUpgrade(socket, 404, "Not Found");
     return;
@@ -200,7 +314,8 @@ server.requestTimeout = 30_000;
 server.keepAliveTimeout = 10_000;
 
 server.listen(port, HOST, () => {
-  console.log(`Cork7 Wisp backend listening on ${HOST}:${port}`);
+  console.log(`Cork7 player and Wisp backend listening on ${HOST}:${port}`);
+  console.log(`Player path: ${PLAYER_PATH}/`);
   console.log(`WebSocket endpoint: ${WISP_PATH}`);
   console.log(`Allowed destinations: ${allowedHosts.join(", ")}`);
   console.log(`Allowed browser origins: ${[...allowedOrigins].join(", ")}`);

@@ -1,80 +1,75 @@
-# Deploy the Cork7 Wisp backend on Northflank
+# Deploy the Cork7 player and Wisp backend on Northflank
 
-This repository now includes a dedicated Wisp WebSocket service for the Cork7 page. It is separate from the Scramjet demo UI and is configured to allow only the exact Cork7 destination hostnames listed in `CORK7_ALLOWED_HOSTS`.
+This service provides both the fixed Cork7 player at `/c7/` and the Wisp WebSocket endpoint at `/wisp/`. The player has no general-purpose address bar. Its initial destination is the official Cork7 game, and the backend allows only exact Cork7 hostnames.
 
-## 1. Create the Northflank service
+## 1. Northflank service
 
-1. Open Northflank and create or select the `cork7` project.
-2. Create a **Combined service** connected to `devperson8000/cork-7-proxy`.
-3. Select branch `feature/cork7-northflank-backend`.
-4. Choose the Dockerfile build option.
-5. Set the Dockerfile path to `/Dockerfile` and the build context to the repository root.
-6. Name the service `cork7-wisp`.
+1. Open your Northflank project `cork7`.
+2. Open the existing Combined service `cork7-wisp`.
+3. Confirm it is connected to `devperson8000/cork-7-proxy` on branch `feature/cork7-northflank-backend`.
+4. Select the Dockerfile build option.
+5. Dockerfile path: `/Dockerfile`; build context: repository root.
+6. The Dockerfile compiles the Scramjet WebAssembly rewriter, the Scramjet/controller bundles and the fixed Cork7 player, then copies the player build into the runtime image.
 
-The Dockerfile pins Node.js 24 and pnpm 12.17.0, installs the locked workspace dependencies, and starts only `server/wisp-server.mjs`. It does not start the general-purpose Scramjet demo.
+The first build can take longer because it compiles the Rust WebAssembly rewriter and the JavaScript bundles.
 
-## 2. Add runtime variables
+## 2. Runtime variables
 
-Add these variables in the Northflank service's runtime environment:
+| Variable | Value |
+| --- | --- |
+| `PORT` | `3000` |
+| `CORK7_ALLOWED_HOSTS` | `cork7.com,www.cork7.com,live.cork7.com` |
+| `ALLOWED_ORIGINS` | `https://cork7game.vercel.app` |
+| `MAX_WS_CONNECTIONS` | `60` |
 
-| Variable | Value | Purpose |
-| --- | --- | --- |
-| `PORT` | `3000` | HTTP and WebSocket listener |
-| `CORK7_ALLOWED_HOSTS` | `cork7.com,www.cork7.com` | Exact outbound hostname allowlist |
-| `ALLOWED_ORIGINS` | `https://cork7game.vercel.app` | Exact browser origin permitted to open the WebSocket |
-| `MAX_WS_CONNECTIONS` | `60` | Maximum concurrent WebSocket sessions per service instance |
+The official Cork7 updates identify `live.cork7.com` as the game's live multiplayer service. It is included as an exact hostname, not as a wildcard.
 
-These values are also provided in `.env.northflank.example`. No API key or password is required by this backend.
+## 3. Networking
 
-**Important:** the hostname list is deliberately exact. Do not replace it with `*` or a broad wildcard. If Cork7 needs another host for assets or game services, verify that hostname first and add only that exact hostname to `CORK7_ALLOWED_HOSTS`.
+Expose:
 
-## 3. Expose the service
+- Port: `3000`
+- Protocol: `HTTP`
+- Accessibility: `Public`
+- Port name: `wisp`
 
-Under the service's networking settings, add:
+Health check: HTTP GET `/health` on port `3000`.
 
-- **Port:** `3000`
-- **Protocol:** `HTTP` (Northflank's HTTP ingress supports WebSocket upgrades)
-- **Accessibility:** `Public`
-- **Port name:** `wisp`
+Northflank's HTTPS ingress provides TLS. The browser's Wisp connection uses `wss://`.
 
-Set the health check to an HTTP GET request to `/health` on port `3000`. The endpoint should return JSON with `"status":"ok"`.
+## 4. Confirm the service
 
-Northflank terminates public TLS at its ingress. The browser therefore connects using `wss://`, not `ws://`.
+- `https://YOUR-NORTHFLANK-HOST/health` should return JSON with `"status":"ok"`.
+- `https://YOUR-NORTHFLANK-HOST/c7/` should return the Cork7 player HTML.
+- The player page shows its own backend and WebSocket status indicators; opening browser developer tools is not required.
 
-## 4. Connect the Vercel frontend
+## 5. Vercel path routing
 
-After the service is deployed, copy its generated public hostname. In the Vercel project serving `https://cork7game.vercel.app`, add this environment variable for the Production environment:
+The Vercel project serving `cork7game.vercel.app` has a route for `/c7/:path*`. Point that route to:
 
 ```text
-VITE_WISP_URL=wss://YOUR-NORTHFLANK-PUBLIC-HOST/wisp/
+https://YOUR-NORTHFLANK-HOST/c7/:path*
 ```
 
-Replace `YOUR-NORTHFLANK-PUBLIC-HOST` with the actual hostname shown by Northflank. Do not include `https://` in the hostname portion; the value must start with `wss://` and end with `/wisp/`.
+This is an external rewrite: the browser keeps `cork7game.vercel.app/c7/` in its address bar while Vercel fetches the player assets from Northflank.
 
-Redeploy the Vercel frontend after changing the variable. Vite variables are embedded at build time.
+The existing Vercel `VITE_WISP_URL` environment variable remains available, but this deployment builds the player in the Northflank Docker image. The baked-in default Wisp URL is the Northflank public hostname configured in `packages/demo/src/store.ts`. Change that default if the Northflank hostname changes.
 
-The frontend must be configured to use this Wisp URL. Setting the variable alone does not change a frontend that has not integrated the Scramjet client.
+## 6. How the player works
 
-## 5. Verify the deployment
+- The player loads only `https://cork7.com/` by default.
+- Any optional `goto` value is accepted only for `https://cork7.com`, `https://www.cork7.com`, or `https://live.cork7.com`.
+- Scramjet's service worker is scoped to `/c7/`; its internal virtual URL prefix and script paths are also under `/c7/`.
+- Wisp permits only the exact destination hosts listed in `CORK7_ALLOWED_HOSTS` and ports 80/443.
+- Direct-IP, private-network, loopback and UDP destinations are disabled.
+- The health panel checks the backend and opens a short WebSocket connection so the user can see status without developer tools.
 
-1. Open `https://YOUR-NORTHFLANK-PUBLIC-HOST/health`. It should return `200` and `{"status":"ok",...}`.
-2. Open the Cork7 page and check the browser console for a successful Wisp WebSocket connection.
-3. Confirm that the game loads.
-4. A connection from an unlisted browser origin should receive `403`.
-5. A request to an unlisted destination hostname or to a destination port other than 80/443 should be blocked by Wisp.
-
-## Security notes
-
-- Private IP ranges, loopback addresses, direct-IP destinations, and UDP streams are disabled.
-- The Wisp backend accepts WebSocket upgrades only at `/wisp/`.
-- The backend checks the browser `Origin` against `ALLOWED_ORIGINS`.
-- The Wisp hostname and port allowlists are enforced server-side; hiding the address bar or restricting the frontend UI is not treated as a security boundary.
-- An Origin check is a browser protection, not user authentication. Anyone who can run a custom client can spoof an Origin header, so keep the strict destination allowlist and resource limits in place.
-- This service is not an anonymity service. Use HTTPS/WSS and do not send passwords or other sensitive information through a proxy unless the game itself supports and documents that usage.
+A successful health check confirms the HTTP server is running. A successful WSS status confirms the browser can complete the WebSocket handshake. Neither alone guarantees every Cork7 asset or multiplayer feature is working; if game assets are blocked, verify the exact additional Cork7 hostname before adding it.
 
 ## Troubleshooting
 
-- **Health check fails:** check the build logs and confirm port `3000` is configured as HTTP.
-- **WebSocket returns 403:** make sure the actual frontend origin appears exactly in `ALLOWED_ORIGINS`.
-- **WebSocket connects but Cork7 assets fail:** inspect the blocked destination hostname, verify it belongs to Cork7, and add that exact hostname to `CORK7_ALLOWED_HOSTS`. Do not enable arbitrary hostnames.
-- **Frontend still uses localhost:** verify `VITE_WISP_URL` is set in the correct Vercel project and Production environment, then redeploy.
+- **Build fails at `wasm-snip`:** check the Northflank build log; the Dockerfile installs the fork required by the repository's rewriter script.
+- **Health works but `/c7/` returns 404:** check that the Docker build completed the Vite player build and copied `packages/demo/dist`.
+- **Player assets fail:** check the Vercel `/c7/:path*` external rewrite and confirm the destination includes `/c7/:path*`.
+- **WebSocket indicator fails:** confirm the public hostname and `ALLOWED_ORIGINS` match the current deployment and Vercel domain.
+- **Some game functionality is unavailable:** check the blocked hostname from the game's own network diagnostics, verify it belongs to Cork7, then add only that exact hostname.

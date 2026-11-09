@@ -2,7 +2,7 @@ import LoadInterstitial from "./components/LoadInterstitial";
 import App from "./App";
 import LibcurlClient from "@mercuryworkshop/libcurl-transport";
 import EpoxyClient from "@mercuryworkshop/epoxy-transport";
-import { defaultConfigDev } from "@mercuryworkshop/scramjet";
+import { defaultConfig } from "@mercuryworkshop/scramjet";
 import { Controller } from "@mercuryworkshop/scramjet-controller";
 import { HttpCachePlugin } from "@mercuryworkshop/scramjet-utils";
 import { demoSettingsStore } from "./store";
@@ -40,40 +40,41 @@ async function waitForControllerOrReady(timeoutMs = 10000): Promise<void> {
 		setTimeout(resolve, timeoutMs)
 	);
 
-	// Wait for whichever happens first; on timeout we continue to avoid blocking the UI.
 	await Promise.race([ready, controllerChanged, timeout]);
 }
 
 async function init() {
 	const interstitial: any = (
-		<LoadInterstitial status={"Loading"}></LoadInterstitial>
+		<LoadInterstitial status={"Starting Cork7"}></LoadInterstitial>
 	);
 	document.body.append(interstitial);
 	interstitial.showModal();
 
 	try {
-		const registration = await navigator.serviceWorker.register("./sw.js");
+		const registration = await navigator.serviceWorker.register("./sw.js", {
+			scope: "/c7/",
+			updateViaCache: "none",
+		});
 
-		// Non-blocking progress updates on state transitions.
 		const updateStatus = (sw: ServiceWorker | null) => {
 			if (!sw) return;
-			const set = (msg: string) => (interstitial.$.state.status = msg);
+			const set = (message: string) => (interstitial.$.state.status = message);
 			const apply = () => {
 				switch (sw.state) {
 					case "installing":
-						set("Installing service worker...");
+						set("Installing game service worker...");
 						break;
 					case "installed":
-						set("Service worker installed, waiting to activate...");
+						set("Service worker installed...");
 						break;
 					case "activating":
-						set("Activating service worker...");
+						set("Activating game session...");
 						break;
 					case "activated":
-						set("Service worker activated");
+						set("Game session ready...");
 						break;
 					case "redundant":
-						set("Service worker became redundant");
+						set("Service worker replaced...");
 						break;
 				}
 			};
@@ -82,34 +83,40 @@ async function init() {
 		};
 
 		updateStatus(registration.installing ?? registration.waiting ?? null);
-
-		// Wait for control or readiness with a timeout; don't hang the UI on updates.
-		interstitial.$.state.status =
-			"Waiting for service worker to take control...";
+		interstitial.$.state.status = "Waiting for game session...";
 		await waitForControllerOrReady(10000);
-		interstitial.$.state.status =
-			"Service worker ready, waiting for controller init";
+		interstitial.$.state.status = "Connecting game controller...";
+
 		const readySw = navigator.serviceWorker.controller ?? registration.active;
 		if (!readySw) {
-			throw new Error("No service worker available for controller");
+			throw new Error("No active service worker is available.");
 		}
+
 		controller = new Controller({
 			serviceworker: readySw,
 			transport: getTransport(),
-			scramjetConfig: defaultConfigDev,
+			config: {
+				prefix: "/c7/~/sj/",
+				scramjetPath: "/c7/scramjet/scramjet.js",
+				injectPath: "/c7/controller/controller.inject.js",
+				wasmPath: "/c7/scramjet/scramjet.wasm",
+			},
+			scramjetConfig: defaultConfig,
 		});
+
 		await controller.wait();
-		console.log(controller);
-		interstitial.$.state.status = "Controller initialized";
 		interstitial.close();
-	} catch (e) {
-		console.error("Error during service worker registration:", e);
-		// Always close the modal on error to prevent hanging UI.
+	} catch (error) {
+		console.error("Cork7 player initialization failed:", error);
 		try {
 			interstitial.close();
 		} catch {}
 		app.innerText =
-			"Failed to register service worker. Check console for details.";
+			"Could not start the Cork7 player. Refresh the page or open the official game directly.";
+		setTimeout(() => {
+			const status = document.getElementById("game-status");
+			if (status) status.textContent = "PLAYER INIT FAILED";
+		}, 0);
 	}
 }
 
@@ -117,17 +124,16 @@ async function mount() {
 	try {
 		const root = <App />;
 		app.replaceWith(root);
-	} catch (e) {
-		let err = e as any;
+	} catch (error) {
 		app.replaceWith(
 			document.createTextNode(
-				`Error mounting: ${"message" in err ? err.message : err}`
+				`Error mounting Cork7 player: ${error instanceof Error ? error.message : String(error)}`
 			)
 		);
-		console.error(err);
-		throw e;
+		console.error(error);
+		throw error;
 	}
 }
 
-init().then(() => mount());
+void init().then(() => mount());
 export { controller, cachePlugin };

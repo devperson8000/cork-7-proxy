@@ -13,22 +13,33 @@ function setStatus(id: string, value: string, state: string) {
 }
 
 async function checkBackend() {
+	const diagnostics = (window as any).C7Diagnostics;
+	diagnostics?.set("backend", "pending", "Requesting Northflank /health");
 	try {
 		const response = await fetch(HEALTH_URL, {
 			cache: "no-store",
 			mode: "cors",
 		});
-		if (!response.ok) throw new Error(`Health check returned ${response.status}`);
+		if (!response.ok) throw new Error(`Health check returned HTTP ${response.status}`);
 		const body = await response.json();
 		if (body.status !== "ok") throw new Error("Unexpected health response");
+		if (body.playerReady === false) {
+			throw new Error("Backend is online, but playerReady is false");
+		}
+		const detail = `HTTP ${response.status} · playerReady=${String(body.playerReady)} · WS path ${body.websocketPath || "unknown"}`;
+		diagnostics?.set("backend", "ok", detail);
 		setStatus("backend-status", "ONLINE", "ok");
 	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		diagnostics?.set("backend", "error", message);
 		console.warn("Cork7 backend health check failed:", error);
 		setStatus("backend-status", "CHECK CONNECTION", "error");
 	}
 }
 
 function checkWebSocket() {
+	const diagnostics = (window as any).C7Diagnostics;
+	diagnostics?.set("wisp", "pending", "Starting Wisp v2 client handshake");
 	setStatus("ws-status", "CONNECTING", "pending");
 	let connection: InstanceType<typeof WispClient.ClientConnection>;
 	try {
@@ -37,6 +48,7 @@ function checkWebSocket() {
 		connection = new WispClient.ClientConnection(demoSettingsStore.wispUrl);
 	} catch (error) {
 		console.warn("Cork7 Wisp connection could not be created:", error);
+		diagnostics?.set("wisp", "error", error instanceof Error ? error.message : String(error));
 		setStatus("ws-status", "UNAVAILABLE", "error");
 		return;
 	}
@@ -45,6 +57,7 @@ function checkWebSocket() {
 	const timeout = window.setTimeout(() => {
 		if (settled) return;
 		settled = true;
+		diagnostics?.set("wisp", "error", "Wisp v2 handshake timed out after 8 seconds");
 		setStatus("ws-status", "TIMEOUT", "error");
 		connection.close();
 	}, 8000);
@@ -53,6 +66,8 @@ function checkWebSocket() {
 		if (settled) return;
 		settled = true;
 		window.clearTimeout(timeout);
+		diagnostics?.set("wisp", "ok", "Wisp protocol handshake completed successfully");
+		diagnostics?.log("Wisp v2 handshake completed.");
 		setStatus("ws-status", "CONNECTED", "ok");
 		connection.close();
 	};
@@ -61,6 +76,7 @@ function checkWebSocket() {
 		if (settled) return;
 		settled = true;
 		window.clearTimeout(timeout);
+		diagnostics?.set("wisp", "error", "WebSocket or Wisp protocol handshake failed");
 		setStatus("ws-status", "HANDSHAKE FAILED", "error");
 	};
 
@@ -68,12 +84,15 @@ function checkWebSocket() {
 		if (settled) return;
 		settled = true;
 		window.clearTimeout(timeout);
+		diagnostics?.set("wisp", "error", "Connection closed before Wisp handshake completed");
 		setStatus("ws-status", "CONNECTION CLOSED", "error");
 	};
 }
 
 const App: Component = function (cx) {
 	cx.mount = () => {
+		(window as any).C7Diagnostics?.set("app", "ok", "Main player UI mounted");
+		(window as any).C7Diagnostics?.log("Main player UI mounted.");
 		void checkBackend();
 		checkWebSocket();
 	};

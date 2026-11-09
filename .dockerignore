@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+.git
+.gitignore
+.DS_Store
+**/dist
+**/target
+**/.turbo
+**/.vite
+**/.cache
+*.log
+.env
+.env.*
+!.env.northflank.example

@@ -136,10 +136,10 @@ function setHealthCors(request, response, allowedOrigins) {
 async function inspectPlayerBuild() {
   try {
     const html = await fs.readFile(PLAYER_INDEX, "utf8");
-    const buildId = html.match(/<meta\\s+name=["']c7-build["']\\s+content=["']([^"']+)["']/i)?.[1] ?? null;
+    const buildId = html.match(/<meta\s+name=["']c7-build["']\s+content=["']([^"']+)["']/i)?.[1] ?? null;
     const diagnosticsPanelPresent = html.includes('id="c7-diagnostics"');
-    const moduleTag = html.match(/<script\\b(?=[^>]*\\btype=["']module["'])[^>]*>/i)?.[0] ?? "";
-    const moduleSrc = moduleTag.match(/\\bsrc=["']([^"']+)["']/i)?.[1] ?? null;
+    const moduleTag = html.match(/<script\b(?=[^>]*\btype=["']module["'])[^>]*>/i)?.[0] ?? "";
+    const moduleSrc = moduleTag.match(/\bsrc=["']([^"']+)["']/i)?.[1] ?? null;
     let moduleAssetPresent = false;
     let moduleAsset = null;
 

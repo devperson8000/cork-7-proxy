@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 
 const HOST = "0.0.0.0";
@@ -12,6 +13,7 @@ const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = path.resolve(SERVER_DIR, "..");
 const STATIC_ROOT = path.join(APP_ROOT, "packages", "demo", "dist");
 const PLAYER_INDEX = path.join(STATIC_ROOT, "index.html");
+const EXPECTED_PLAYER_BUILD = "c7-diagnostics-2026-11-09-1";
 const DEFAULT_ALLOWED_HOSTS =
   "cork7.com,www.cork7.com,live.cork7.com";
 const DEFAULT_ALLOWED_ORIGINS = "https://cork7game.vercel.app";
@@ -130,6 +132,71 @@ function setHealthCors(request, response, allowedOrigins) {
   }
 }
 
+
+async function inspectPlayerBuild() {
+  try {
+    const html = await fs.readFile(PLAYER_INDEX, "utf8");
+    const buildId = html.match(/<meta\\s+name=["']c7-build["']\\s+content=["']([^"']+)["']/i)?.[1] ?? null;
+    const diagnosticsPanelPresent = html.includes('id="c7-diagnostics"');
+    const moduleTag = html.match(/<script\\b(?=[^>]*\\btype=["']module["'])[^>]*>/i)?.[0] ?? "";
+    const moduleSrc = moduleTag.match(/\\bsrc=["']([^"']+)["']/i)?.[1] ?? null;
+    let moduleAssetPresent = false;
+    let moduleAsset = null;
+
+    if (moduleSrc) {
+      const moduleUrl = new URL(moduleSrc, "http://localhost");
+      if (moduleUrl.pathname.startsWith(PLAYER_PATH + "/")) {
+        const relative = decodeURIComponent(moduleUrl.pathname.slice(PLAYER_PATH.length + 1));
+        const resolved = path.resolve(STATIC_ROOT, relative);
+        if (resolved.startsWith(STATIC_ROOT + path.sep)) {
+          moduleAsset = relative;
+          moduleAssetPresent = existsSync(resolved);
+        }
+      }
+    }
+
+    const requiredAssets = [
+      "sw.js",
+      "controller/controller.sw.js",
+      "controller/controller.inject.js",
+      "controller/controller.api.js",
+      "scramjet/scramjet.js",
+      "scramjet/scramjet.wasm"
+    ];
+    const missingAssets = requiredAssets.filter((asset) =>
+      !existsSync(path.join(STATIC_ROOT, asset))
+    );
+    const indexHash = createHash("sha256").update(html).digest("hex").slice(0, 16);
+    const checksPass =
+      buildId === EXPECTED_PLAYER_BUILD &&
+      diagnosticsPanelPresent &&
+      moduleAssetPresent &&
+      missingAssets.length === 0;
+
+    return {
+      buildId,
+      expectedBuildId: EXPECTED_PLAYER_BUILD,
+      diagnosticsPanelPresent,
+      moduleAsset,
+      moduleAssetPresent,
+      missingAssets,
+      indexHash,
+      playerReady: checksPass
+    };
+  } catch (error) {
+    return {
+      buildId: null,
+      expectedBuildId: EXPECTED_PLAYER_BUILD,
+      diagnosticsPanelPresent: false,
+      moduleAsset: null,
+      moduleAssetPresent: false,
+      missingAssets: ["index.html or player build could not be inspected"],
+      error: error instanceof Error ? error.message : String(error),
+      playerReady: false
+    };
+  }
+}
+
 async function servePlayerAsset(pathname, response) {
   let relativePath;
   try {
@@ -216,7 +283,7 @@ logging.set_level(logging.INFO);
 
 let activeWsConnections = 0;
 
-const server = http.createServer((request, response) => {
+const server = http.createServer(async (request, response) => {
   let pathname;
   try {
     pathname = new URL(request.url ?? "/", "http://localhost").pathname;
@@ -228,6 +295,7 @@ const server = http.createServer((request, response) => {
 
   if (request.method === "GET" && pathname === "/health") {
     setHealthCors(request, response, allowedOrigins);
+    const playerDiagnostics = await inspectPlayerBuild();
     response.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store"
@@ -237,7 +305,8 @@ const server = http.createServer((request, response) => {
         status: "ok",
         service: "cork7-wisp",
         player: "/c7/",
-        playerReady: existsSync(PLAYER_INDEX),
+        playerReady: playerDiagnostics.playerReady,
+        playerDiagnostics,
         websocketPath: WISP_PATH
       })
     );

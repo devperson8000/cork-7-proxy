@@ -7,8 +7,31 @@ ENV VITE_WISP_URL="wss://p01--cork7--yf5q7tyyggsr.code.run/wisp/"
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       ca-certificates curl git build-essential pkg-config binaryen \
+       ca-certificates curl git build-essential pkg-config \
     && rm -rf /var/lib/apt/lists/*
+
+# Debian Bookworm's packaged Binaryen is too old for the global-effects
+# optimizer pass used by Scramjet's release rewriter. Pin an official release
+# and verify the downloaded archive before using it.
+ARG TARGETARCH
+RUN set -eux; \
+    case "${TARGETARCH:-amd64}" in \
+      amd64) \
+        BINARYEN_ARCH="x86_64"; \
+        BINARYEN_SHA256="2dc9c7813f5375db93d96ead4b78222fcc3e2677bbb832297af4797782a37489" ;; \
+      arm64) \
+        BINARYEN_ARCH="aarch64"; \
+        BINARYEN_SHA256="89c07ea56faf38d0fbec36ca8ec0721756716185f265b568e133d427f299bf8" ;; \
+      *) echo "Unsupported TARGETARCH: ${TARGETARCH}"; exit 1 ;; \
+    esac; \
+    BINARYEN_VERSION="133"; \
+    curl -fsSL "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-${BINARYEN_ARCH}-linux.tar.gz" -o /tmp/binaryen.tar.gz; \
+    echo "${BINARYEN_SHA256}  /tmp/binaryen.tar.gz" | sha256sum -c -; \
+    mkdir -p /opt/binaryen; \
+    tar -xzf /tmp/binaryen.tar.gz --strip-components=1 -C /opt/binaryen; \
+    ln -s /opt/binaryen/bin/wasm-opt /usr/local/bin/wasm-opt; \
+    wasm-opt --help | grep -F -- '--generate-global-effects'; \
+    rm -f /tmp/binaryen.tar.gz
 
 RUN npm install --global pnpm@12.17.0
 

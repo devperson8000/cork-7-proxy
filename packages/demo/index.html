@@ -7,12 +7,238 @@
 		<meta name="theme-color" content="#090d12" />
 		<meta name="color-scheme" content="dark" />
 		<title>Cork7 // Game Session</title>
+		<style>
+			html, body { margin: 0; min-height: 100%; background: #080b10; color: #edf2f7; }
+			#c7-diagnostics {
+				position: fixed; z-index: 2147483647; inset: 8px 8px auto;
+				max-height: 46vh; overflow: auto; box-sizing: border-box;
+				padding: 12px; border: 1px solid #40556a; border-radius: 10px;
+				background: rgba(7, 12, 19, .98); color: #edf2f7;
+				font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+				box-shadow: 0 8px 40px rgba(0,0,0,.55);
+			}
+			#c7-diagnostics * { box-sizing: border-box; }
+			#c7-diagnostics .c7-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+			#c7-diagnostics .c7-title { color:#a8e3d6; font-weight:900; letter-spacing:.16em; }
+			#c7-diagnostics .c7-summary { margin-left:auto; color:#f0c879; font-weight:800; }
+			#c7-diagnostics button {
+				border:1px solid #52677e; border-radius:6px; background:#172332;
+				color:#e8f0f7; padding:5px 9px; font:inherit; cursor:pointer;
+			}
+			#c7-diagnostics .c7-subtitle { margin:7px 0 10px; color:#9aabbd; font-size:11px; }
+			#c7-diagnostics .c7-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px 14px; }
+			#c7-diagnostics .c7-row {
+				min-width:0; display:grid; grid-template-columns:minmax(120px, .7fr) 82px minmax(0, 1.5fr);
+				gap:8px; align-items:baseline; padding:4px 0; border-top:1px solid #1b2a39;
+			}
+			#c7-diagnostics .c7-name { color:#cad6e2; font-weight:700; }
+			#c7-diagnostics .c7-state { font-weight:900; color:#f0c879; }
+			#c7-diagnostics .c7-detail { min-width:0; overflow-wrap:anywhere; color:#8fa1b5; font-size:10px; }
+			#c7-diagnostics [data-state="ok"] .c7-state { color:#83d8a4; }
+			#c7-diagnostics [data-state="error"] .c7-state { color:#ff8c8c; }
+			#c7-diagnostics [data-state="warn"] .c7-state { color:#f0c879; }
+			#c7-diagnostics .c7-log-title { margin-top:10px; padding-top:8px; border-top:1px solid #29394b; color:#a8e3d6; font-weight:800; }
+			#c7-diagnostics-log { max-height:85px; overflow:auto; margin:5px 0 0; padding-left:20px; color:#9aabbd; font-size:10px; }
+			#c7-diagnostics-log li { margin:2px 0; overflow-wrap:anywhere; }
+			#app { min-height:100vh; }
+			@media (max-width:650px) {
+				#c7-diagnostics { inset:4px 4px auto; max-height:55vh; padding:9px; }
+				#c7-diagnostics .c7-grid { grid-template-columns:1fr; }
+				#c7-diagnostics .c7-row { grid-template-columns:110px 72px minmax(0,1fr); }
+				#c7-diagnostics .c7-subtitle { font-size:10px; }
+			}
+		</style>
+		<script>
+			(function () {
+				var statuses = Object.create(null);
+				var logs = [];
+				var labels = {
+					html: "HTML document",
+					scramjetScript: "Scramjet script",
+					controllerApi: "Controller API script",
+					moduleEntry: "Application module",
+					moduleRuntime: "JavaScript startup",
+					backend: "Northflank health API",
+					swAsset: "Player service-worker file",
+					swControllerAsset: "Controller worker file",
+					injectAsset: "Scramjet inject script",
+					wasmAsset: "Scramjet WASM file",
+					serviceWorker: "Browser service worker",
+					swControl: "Page controlled by worker",
+					controller: "Scramjet controller",
+					wisp: "Wisp v2 WebSocket",
+					app: "Player interface",
+					game: "Cork7 game frame"
+				};
 
-		<script src="%BASE_URL%scramjet/scramjet.js"></script>
-		<script src="%BASE_URL%controller/controller.api.js"></script>
+				function render(id) {
+					var row = document.getElementById("c7-check-" + id);
+					if (!row || !statuses[id]) return;
+					var status = row.querySelector(".c7-state");
+					var detail = row.querySelector(".c7-detail");
+					row.setAttribute("data-state", statuses[id].state);
+					if (status) status.textContent = statuses[id].state.toUpperCase();
+					if (detail) detail.textContent = statuses[id].detail || "";
+				}
+
+				function set(id, state, detail) {
+					statuses[id] = { state: state || "pending", detail: String(detail || "") };
+					render(id);
+					updateSummary();
+					if (state === "error" || state === "warn") log((labels[id] || id) + ": " + (detail || state));
+				}
+
+				function updateSummary() {
+					var values = Object.keys(statuses).map(function (id) { return statuses[id].state; });
+					var errors = values.filter(function (s) { return s === "error"; }).length;
+					var warnings = values.filter(function (s) { return s === "warn"; }).length;
+					var pending = values.filter(function (s) { return s === "pending"; }).length;
+					var summary = document.getElementById("c7-diagnostics-summary");
+					if (!summary) return;
+					if (errors) summary.textContent = errors + " ISSUE(S) · " + warnings + " WARNING(S) · " + pending + " PENDING";
+					else if (pending) summary.textContent = "CHECKING · " + pending + " PENDING";
+					else if (warnings) summary.textContent = "READY WITH " + warnings + " WARNING(S)";
+					else summary.textContent = "ALL CHECKS PASSED";
+				}
+
+				function log(message) {
+					var timestamp = new Date().toLocaleTimeString();
+					logs.push(timestamp + "  " + String(message));
+					if (logs.length > 30) logs.shift();
+					var list = document.getElementById("c7-diagnostics-log");
+					if (!list) return;
+					list.textContent = "";
+					logs.forEach(function (line) {
+						var item = document.createElement("li");
+						item.textContent = line;
+						list.appendChild(item);
+					});
+				}
+
+				function probe(id, url, expected) {
+					set(id, "pending", "Checking " + url);
+					var abort = new AbortController();
+					return fetch(url, { method: "GET", cache: "no-store", signal: abort.signal })
+						.then(function (response) {
+							var detail = "HTTP " + response.status + " · " + (response.headers.get("content-type") || "unknown type");
+							if (response.ok) {
+								set(id, "ok", detail);
+								if (response.body && response.body.cancel) response.body.cancel();
+							} else {
+								set(id, "error", detail);
+								if (response.body && response.body.cancel) response.body.cancel();
+							}
+						})
+						.catch(function (error) {
+							set(id, "error", error && error.message ? error.message : String(error));
+						});
+				}
+
+				function copyReport() {
+					var report = {
+						url: location.href,
+						time: new Date().toISOString(),
+						userAgent: navigator.userAgent,
+						statuses: statuses,
+						logs: logs
+					};
+					var text = JSON.stringify(report, null, 2);
+					if (navigator.clipboard && navigator.clipboard.writeText) {
+						navigator.clipboard.writeText(text).then(function () {
+							log("Diagnostic report copied to clipboard.");
+						}).catch(function () { log(text); });
+					} else {
+						log(text);
+					}
+				}
+
+				window.C7Diagnostics = {
+					set: set,
+					log: log,
+					probe: probe,
+					copyReport: copyReport,
+					snapshot: function () { return { statuses: statuses, logs: logs }; }
+				};
+
+				window.addEventListener("error", function (event) {
+					var message = event.message || (event.target && event.target.src) || "Unknown JavaScript/resource error";
+					log("BROWSER ERROR: " + message + (event.filename ? " · " + event.filename + ":" + event.lineno : ""));
+					if (event.target && event.target.tagName === "SCRIPT") {
+						set("moduleRuntime", "error", "Script resource failed: " + (event.target.src || "inline script"));
+					}
+				}, true);
+
+				window.addEventListener("unhandledrejection", function (event) {
+					var reason = event.reason;
+					var message = reason && reason.stack ? reason.stack : String(reason);
+					log("UNHANDLED PROMISE: " + message);
+					set("moduleRuntime", "error", message);
+				});
+
+				document.addEventListener("DOMContentLoaded", function () {
+					set("html", "ok", document.readyState + " · " + location.pathname);
+					set("moduleRuntime", "pending", "Waiting for application entrypoint");
+					set("serviceWorker", "pending", "Waiting for application registration");
+					set("controller", "pending", "Waiting for application initialization");
+					set("wisp", "pending", "Waiting for Wisp protocol test");
+					set("game", "pending", "Waiting for player frame");
+					if (!window.isSecureContext) set("serviceWorker", "error", "Service workers require a secure context");
+					else if (!("serviceWorker" in navigator)) set("serviceWorker", "error", "Service workers are unavailable in this browser");
+					else set("serviceWorker", "pending", "Supported by browser");
+					var module = document.querySelector('script[type="module"][src]');
+					if (module && module.src) probe("moduleEntry", module.src, "javascript");
+					probe("swAsset", "/c7/sw.js");
+					probe("swControllerAsset", "/c7/controller/controller.sw.js");
+					probe("injectAsset", "/c7/controller/controller.inject.js");
+					probe("wasmAsset", "/c7/scramjet/scramjet.wasm");
+					probe("backend", "https://p01--cork7--yf5q7tyyggsr.code.run/health");
+				});
+
+				log("Static diagnostics initialized before the player application.");
+			})();
+		</script>
+		<script
+			src="%BASE_URL%scramjet/scramjet.js"
+			onload="window.C7Diagnostics && C7Diagnostics.set('scramjetScript','ok','Classic script loaded')"
+			onerror="window.C7Diagnostics && C7Diagnostics.set('scramjetScript','error','Failed to load Scramjet script')"
+		></script>
+		<script
+			src="%BASE_URL%controller/controller.api.js"
+			onload="window.C7Diagnostics && C7Diagnostics.set('controllerApi','ok','Classic script loaded')"
+			onerror="window.C7Diagnostics && C7Diagnostics.set('controllerApi','error','Failed to load controller API')"
+		></script>
 	</head>
 
 	<body>
+		<aside id="c7-diagnostics" role="region" aria-label="Cork7 runtime diagnostics">
+			<div class="c7-head">
+				<span class="c7-title">C7 // RUNTIME DIAGNOSTICS</span>
+				<span id="c7-diagnostics-summary" class="c7-summary">HTML RECEIVED · CHECKS STARTING</span>
+				<button type="button" onclick="window.C7Diagnostics && C7Diagnostics.copyReport()">COPY REPORT</button>
+			</div>
+			<div class="c7-subtitle">This panel is part of the raw HTML and remains visible if the player JavaScript or service worker fails.</div>
+			<div class="c7-grid">
+				<div class="c7-row" id="c7-check-html" data-state="ok"><span class="c7-name">HTML document</span><span class="c7-state">OK</span><span class="c7-detail">Document delivered by server</span></div>
+				<div class="c7-row" id="c7-check-scramjetScript" data-state="pending"><span class="c7-name">Scramjet script</span><span class="c7-state">WAIT</span><span class="c7-detail">Waiting for script load</span></div>
+				<div class="c7-row" id="c7-check-controllerApi" data-state="pending"><span class="c7-name">Controller API script</span><span class="c7-state">WAIT</span><span class="c7-detail">Waiting for script load</span></div>
+				<div class="c7-row" id="c7-check-moduleEntry" data-state="pending"><span class="c7-name">Application module</span><span class="c7-state">WAIT</span><span class="c7-detail">Checking compiled module</span></div>
+				<div class="c7-row" id="c7-check-moduleRuntime" data-state="pending"><span class="c7-name">JavaScript startup</span><span class="c7-state">WAIT</span><span class="c7-detail">Waiting for app entrypoint</span></div>
+				<div class="c7-row" id="c7-check-app" data-state="pending"><span class="c7-name">Player interface</span><span class="c7-state">WAIT</span><span class="c7-detail">Waiting for interface mount</span></div>
+				<div class="c7-row" id="c7-check-backend" data-state="pending"><span class="c7-name">Northflank health API</span><span class="c7-state">WAIT</span><span class="c7-detail">Checking backend</span></div>
+				<div class="c7-row" id="c7-check-swAsset" data-state="pending"><span class="c7-name">Player service-worker file</span><span class="c7-state">WAIT</span><span class="c7-detail">Checking /c7/sw.js</span></div>
+				<div class="c7-row" id="c7-check-swControllerAsset" data-state="pending"><span class="c7-name">Controller worker file</span><span class="c7-state">WAIT</span><span class="c7-detail">Checking controller.sw.js</span></div>
+				<div class="c7-row" id="c7-check-injectAsset" data-state="pending"><span class="c7-name">Scramjet inject script</span><span class="c7-state">WAIT</span><span class="c7-detail">Checking controller.inject.js</span></div>
+				<div class="c7-row" id="c7-check-wasmAsset" data-state="pending"><span class="c7-name">Scramjet WASM file</span><span class="c7-state">WAIT</span><span class="c7-detail">Checking scramjet.wasm</span></div>
+				<div class="c7-row" id="c7-check-serviceWorker" data-state="pending"><span class="c7-name">Browser service worker</span><span class="c7-state">WAIT</span><span class="c7-detail">Waiting for registration</span></div>
+				<div class="c7-row" id="c7-check-swControl" data-state="pending"><span class="c7-name">Page controlled by worker</span><span class="c7-state">WAIT</span><span class="c7-detail">Waiting for controllerchange</span></div>
+				<div class="c7-row" id="c7-check-controller" data-state="pending"><span class="c7-name">Scramjet controller</span><span class="c7-state">WAIT</span><span class="c7-detail">Waiting for initialization</span></div>
+				<div class="c7-row" id="c7-check-wisp" data-state="pending"><span class="c7-name">Wisp v2 WebSocket</span><span class="c7-state">WAIT</span><span class="c7-detail">Waiting for protocol handshake</span></div>
+				<div class="c7-row" id="c7-check-game" data-state="pending"><span class="c7-name">Cork7 game frame</span><span class="c7-state">WAIT</span><span class="c7-detail">Waiting for game navigation</span></div>
+			</div>
+			<div class="c7-log-title">LIVE EVENT LOG</div>
+			<ol id="c7-diagnostics-log"><li>Waiting for checks...</li></ol>
+		</aside>
+
 		<div id="app">
 			<main style="min-height:100vh;display:grid;place-items:center;background:#080b10;color:#edf2f7;font-family:system-ui,sans-serif;text-align:center;padding:24px;box-sizing:border-box">
 				<section>
@@ -21,6 +247,10 @@
 				</section>
 			</main>
 		</div>
-		<script type="module" src="/src/index.tsx"></script>
+		<script
+			type="module"
+			src="/src/index.tsx"
+			onerror="window.C7Diagnostics && C7Diagnostics.set('moduleRuntime','error','Vite application module failed to load')"
+		></script>
 	</body>
 </html>

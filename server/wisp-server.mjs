@@ -47,14 +47,14 @@ function normalizeOrigin(value) {
   const url = new URL(value);
 
   if (
-    !["https:", "http:"].includes(url.protocol) ||
+    url.protocol !== "https:" ||
     url.username ||
     url.password ||
     url.pathname !== "/" ||
     url.search ||
     url.hash
   ) {
-    throw new Error(`Invalid browser origin: "${value}". Supply an origin only, such as https://example.com.`);
+    throw new Error(`Invalid browser origin: "${value}". Supply an HTTPS origin only, such as https://example.com.`);
   }
 
   return url.origin;
@@ -148,15 +148,9 @@ const server = http.createServer((request, response) => {
 });
 
 server.on("upgrade", (request, socket, head) => {
-  let pathname;
-  try {
-    pathname = new URL(request.url ?? "/", "http://localhost").pathname;
-  } catch {
-    rejectUpgrade(socket, 400, "Bad Request");
-    return;
-  }
-
-  if (pathname !== WISP_PATH) {
+  // Compare the raw request target too: Wisp selects its protocol from the
+  // trailing slash, so query strings or alternate paths must not be accepted.
+  if (request.url !== WISP_PATH) {
     rejectUpgrade(socket, 404, "Not Found");
     return;
   }

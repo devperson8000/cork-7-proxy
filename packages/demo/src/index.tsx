@@ -8,6 +8,10 @@ import { demoSettingsStore } from "./store";
 
 let app = document.getElementById("app")!;
 
+const diagnostics = (window as any).C7Diagnostics;
+diagnostics?.set("moduleRuntime", "ok", "src/index.tsx module executed");
+diagnostics?.log("Application module entrypoint executed.");
+
 let controller: InstanceType<typeof Controller>;
 const cachePlugin = new HttpCachePlugin();
 
@@ -63,6 +67,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
 
 async function init(): Promise<InstanceType<typeof Controller>> {
 	try {
+		diagnostics?.set("serviceWorker", "pending", "Registering /c7/sw.js with scope /c7/");
 		const registration = await withTimeout(
 			navigator.serviceWorker.register("./sw.js", {
 				scope: "/c7/",
@@ -71,14 +76,27 @@ async function init(): Promise<InstanceType<typeof Controller>> {
 			20000,
 			"Service worker registration"
 		);
+		diagnostics?.set(
+			"serviceWorker",
+			"ok",
+			"Registered · scope " + registration.scope + " · active " + (registration.active?.state ?? "not active")
+		);
 
 		await waitForControllerOrReady(10000);
 
 		const readySw = navigator.serviceWorker.controller ?? registration.active;
+		diagnostics?.set(
+			"swControl",
+			navigator.serviceWorker.controller ? "ok" : "warn",
+			navigator.serviceWorker.controller
+				? "This page is controlled by the /c7/ service worker"
+				: "No controller on this document yet; using active registration worker"
+		);
 		if (!readySw) {
 			throw new Error("No active service worker is available.");
 		}
 
+		diagnostics?.set("controller", "pending", "Creating Scramjet controller and loading WASM");
 		controller = new Controller({
 			serviceworker: readySw,
 			transport: getTransport(),
@@ -92,8 +110,13 @@ async function init(): Promise<InstanceType<typeof Controller>> {
 		});
 
 		await withTimeout(controller.wait(), 20000, "Scramjet controller startup");
+		diagnostics?.set("controller", "ok", "Controller ready · WASM fetched · service-worker RPC responded");
+		diagnostics?.log("Scramjet controller startup completed.");
 		return controller;
 	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		diagnostics?.set("controller", "error", message);
+		diagnostics?.log("Controller initialization failed: " + message);
 		console.error("Cork7 player initialization failed:", error);
 		const status = document.getElementById("game-status");
 		if (status) status.textContent = "PLAYER INIT FAILED";
@@ -104,8 +127,12 @@ async function init(): Promise<InstanceType<typeof Controller>> {
 async function mount() {
 	try {
 		const root = <App />;
+		diagnostics?.set("app", "ok", "Player interface component mounted");
 		app.replaceWith(root);
 	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		diagnostics?.set("app", "error", message);
+		diagnostics?.log("Player interface mount failed: " + message);
 		app.replaceWith(
 			document.createTextNode(
 				`Error mounting Cork7 player: ${error instanceof Error ? error.message : String(error)}`

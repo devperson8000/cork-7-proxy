@@ -1,12 +1,17 @@
 import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 
 const HOST = "0.0.0.0";
 const WISP_PATH = "/wisp/";
 const PLAYER_PATH = "/c7";
-const STATIC_ROOT = path.resolve("packages/demo/dist");
+const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
+const APP_ROOT = path.resolve(SERVER_DIR, "..");
+const STATIC_ROOT = path.join(APP_ROOT, "packages", "demo", "dist");
+const PLAYER_INDEX = path.join(STATIC_ROOT, "index.html");
 const DEFAULT_ALLOWED_HOSTS =
   "cork7.com,www.cork7.com,live.cork7.com";
 const DEFAULT_ALLOWED_ORIGINS = "https://cork7game.vercel.app";
@@ -232,6 +237,7 @@ const server = http.createServer((request, response) => {
         status: "ok",
         service: "cork7-wisp",
         player: "/c7/",
+        playerReady: existsSync(PLAYER_INDEX),
         websocketPath: WISP_PATH
       })
     );

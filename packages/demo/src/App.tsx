@@ -39,7 +39,7 @@ async function checkBackend() {
 
 function checkWebSocket() {
 	const diagnostics = (window as any).C7Diagnostics;
-	diagnostics?.set("wisp", "pending", "Starting Wisp v2 client handshake");
+	diagnostics?.set("wisp", "pending", "Connecting to " + demoSettingsStore.wispUrl + " using Wisp v2");
 	setStatus("ws-status", "CONNECTING", "pending");
 	let connection: InstanceType<typeof WispClient.ClientConnection>;
 	try {

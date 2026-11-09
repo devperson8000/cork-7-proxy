@@ -378,6 +378,9 @@ importers:
       '@mercuryworkshop/proxy-transports':
         specifier: 'catalog:'
         version: 1.0.2
+      '@mercuryworkshop/wisp-js':
+        specifier: 'catalog:'
+        version: 0.4.1
       '@mercuryworkshop/scramjet':
         specifier: workspace:*
         version: link:../core

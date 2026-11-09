@@ -23,10 +23,19 @@ async function checkBackend() {
 		if (!response.ok) throw new Error(`Health check returned HTTP ${response.status}`);
 		const body = await response.json();
 		if (body.status !== "ok") throw new Error("Unexpected health response");
+		const tlsProbe = body.cork7TlsProbe;
+		if (tlsProbe && typeof tlsProbe.ok === "boolean") {
+			const tlsDetail = tlsProbe.ok
+				? "Node TLS to cork7.com succeeded · " + (tlsProbe.protocol || "TLS")
+				: "Northflank TLS to cork7.com failed · " + (tlsProbe.code || "unknown") + " · " + (tlsProbe.error || "no detail");
+			diagnostics?.set("targetTls", tlsProbe.ok ? "ok" : "error", tlsDetail);
+		} else {
+			diagnostics?.set("targetTls", "warn", "TLS probe is not present; the latest Northflank server build is required");
+		}
 		if (body.playerReady !== true) {
 			throw new Error("Backend build verification failed: " + JSON.stringify(body.playerDiagnostics ?? body));
 		}
-		const detail = `HTTP ${response.status} · build=${body.playerDiagnostics?.buildId || "unknown"} · verified assets present · WS path ${body.websocketPath || "unknown"}`;
+		const detail = `HTTP ${response.status} · build=${body.playerDiagnostics?.buildId || "unknown"} · TLS=${tlsProbe?.ok === true ? "OK" : tlsProbe?.ok === false ? "FAILED" : "not checked"} · verified assets present · WS path ${body.websocketPath || "unknown"}`;
 		diagnostics?.set("backend", "ok", detail);
 		setStatus("backend-status", "ONLINE", "ok");
 	} catch (error) {

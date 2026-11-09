@@ -101,10 +101,7 @@
 					else summary.textContent = "ALL CHECKS PASSED";
 				}
 
-				function log(message) {
-					var timestamp = new Date().toLocaleTimeString();
-					logs.push(timestamp + "  " + String(message));
-					if (logs.length > 30) logs.shift();
+				function renderLogs() {
 					var list = document.getElementById("c7-diagnostics-log");
 					if (!list) return;
 					list.textContent = "";
@@ -115,18 +112,28 @@
 					});
 				}
 
+				function log(message) {
+					var timestamp = new Date().toLocaleTimeString();
+					logs.push(timestamp + "  " + String(message));
+					if (logs.length > 30) logs.shift();
+					renderLogs();
+				}
+
 				function probe(id, url, expected) {
 					set(id, "pending", "Checking " + url);
-					var abort = new AbortController();
-					return fetch(url, { method: "GET", cache: "no-store", signal: abort.signal })
+					return fetch(url, { method: "GET", cache: "no-store" })
 						.then(function (response) {
-							var detail = "HTTP " + response.status + " · " + (response.headers.get("content-type") || "unknown type");
-							if (response.ok) {
-								set(id, "ok", detail);
-								if (response.body && response.body.cancel) response.body.cancel();
-							} else {
+							var contentType = response.headers.get("content-type") || "unknown type";
+							var detail = "HTTP " + response.status + " · " + contentType;
+							if (!response.ok) {
 								set(id, "error", detail);
-								if (response.body && response.body.cancel) response.body.cancel();
+							} else if (expected && contentType.indexOf(expected) === -1) {
+								set(id, "warn", "Unexpected content type · " + detail);
+							} else {
+								set(id, "ok", detail);
+							}
+							if (response.body && response.body.cancel) {
+								response.body.cancel().catch(function () {});
 							}
 						})
 						.catch(function (error) {
@@ -176,22 +183,42 @@
 				});
 
 				document.addEventListener("DOMContentLoaded", function () {
-					set("html", "ok", document.readyState + " · " + location.pathname);
-					set("moduleRuntime", "pending", "Waiting for application entrypoint");
-					set("serviceWorker", "pending", "Waiting for application registration");
-					set("controller", "pending", "Waiting for application initialization");
-					set("wisp", "pending", "Waiting for Wisp protocol test");
-					set("game", "pending", "Waiting for player frame");
+					if (!statuses.html) set("html", "ok", document.readyState + " · " + location.pathname);
+					if (!statuses.moduleRuntime) set("moduleRuntime", "pending", "Waiting for application entrypoint");
+					if (!statuses.serviceWorker) set("serviceWorker", "pending", "Waiting for application registration");
+					if (!statuses.controller) set("controller", "pending", "Waiting for application initialization");
+					if (!statuses.wisp) set("wisp", "pending", "Waiting for Wisp protocol test");
+					if (!statuses.game) set("game", "pending", "Waiting for player frame");
 					if (!window.isSecureContext) set("serviceWorker", "error", "Service workers require a secure context");
 					else if (!("serviceWorker" in navigator)) set("serviceWorker", "error", "Service workers are unavailable in this browser");
-					else set("serviceWorker", "pending", "Supported by browser");
+					else if (!statuses.serviceWorker || statuses.serviceWorker.state === "pending") set("serviceWorker", "pending", "Supported by browser; waiting for registration");
+					Object.keys(statuses).forEach(render);
+					updateSummary();
+					renderLogs();
 					var module = document.querySelector('script[type="module"][src]');
 					if (module && module.src) probe("moduleEntry", module.src, "javascript");
-					probe("swAsset", "/c7/sw.js");
-					probe("swControllerAsset", "/c7/controller/controller.sw.js");
-					probe("injectAsset", "/c7/controller/controller.inject.js");
-					probe("wasmAsset", "/c7/scramjet/scramjet.wasm");
-					probe("backend", "https://p01--cork7--yf5q7tyyggsr.code.run/health");
+					probe("swAsset", "/c7/sw.js", "javascript");
+					probe("swControllerAsset", "/c7/controller/controller.sw.js", "javascript");
+					probe("injectAsset", "/c7/controller/controller.inject.js", "javascript");
+					probe("wasmAsset", "/c7/scramjet/scramjet.wasm", "application/wasm");
+					probe("backend", "https://p01--cork7--yf5q7tyyggsr.code.run/health", "application/json");
+					if ("serviceWorker" in navigator) {
+						navigator.serviceWorker.addEventListener("controllerchange", function () {
+							set("swControl", "ok", "Browser reports an active service-worker controller");
+						});
+						navigator.serviceWorker.addEventListener("message", function (event) {
+							var data = event.data || {};
+							if (data.c7Diagnostic && data.c7Diagnostic.error) {
+								set("game", "error", data.c7Diagnostic.error);
+								log("SERVICE WORKER ERROR: " + data.c7Diagnostic.error);
+							}
+						});
+						if (navigator.serviceWorker.controller) {
+							set("swControl", "ok", "This document is already controlled by a service worker");
+						} else {
+							set("swControl", "pending", "Waiting for service-worker control");
+						}
+					}
 				});
 
 				log("Static diagnostics initialized before the player application.");

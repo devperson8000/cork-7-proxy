@@ -8,7 +8,7 @@ function reportScramjetError(clientId, requestUrl, message) {
 			time: new Date().toISOString(),
 		},
 	};
-	self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+	const notification = self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
 		for (const client of clients) {
 			client.postMessage(detail);
 		}
@@ -18,6 +18,7 @@ function reportScramjetError(clientId, requestUrl, message) {
 	if (clientId) {
 		console.error("Cork7 Scramjet request failed:", requestUrl, message);
 	}
+	return notification;
 }
 
 addEventListener("fetch", (event) => {
@@ -31,12 +32,12 @@ addEventListener("fetch", (event) => {
 				try {
 					body = await response.clone().text();
 				} catch {}
-				reportScramjetError(event.clientId, event.request.url, body.slice(0, 1000));
+				await reportScramjetError(event.clientId, event.request.url, body.slice(0, 1000));
 			}
 			return response;
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			reportScramjetError(event.clientId, event.request.url, message);
+			await reportScramjetError(event.clientId, event.request.url, message);
 			return new Response("Internal Service Worker Error: " + message, {
 				status: 500,
 				headers: { "Content-Type": "text/plain; charset=utf-8" },

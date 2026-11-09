@@ -1,4 +1,3 @@
-import LoadInterstitial from "./components/LoadInterstitial";
 import App from "./App";
 import LibcurlClient from "@mercuryworkshop/libcurl-transport";
 import EpoxyClient from "@mercuryworkshop/epoxy-transport";
@@ -43,49 +42,37 @@ async function waitForControllerOrReady(timeoutMs = 10000): Promise<void> {
 	await Promise.race([ready, controllerChanged, timeout]);
 }
 
-async function init() {
-	const interstitial: any = (
-		<LoadInterstitial status={"Starting Cork7"}></LoadInterstitial>
-	);
-	document.body.append(interstitial);
-	interstitial.showModal();
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const timeout = window.setTimeout(
+			() => reject(new Error(`${label} timed out after ${timeoutMs / 1000}s`)),
+			timeoutMs
+		);
+		promise.then(
+			(value) => {
+				window.clearTimeout(timeout);
+				resolve(value);
+			},
+			(error) => {
+				window.clearTimeout(timeout);
+				reject(error);
+			}
+		);
+	});
+}
 
+async function init(): Promise<InstanceType<typeof Controller>> {
 	try {
-		const registration = await navigator.serviceWorker.register("./sw.js", {
-			scope: "/c7/",
-			updateViaCache: "none",
-		});
+		const registration = await withTimeout(
+			navigator.serviceWorker.register("./sw.js", {
+				scope: "/c7/",
+				updateViaCache: "none",
+			}),
+			20000,
+			"Service worker registration"
+		);
 
-		const updateStatus = (sw: ServiceWorker | null) => {
-			if (!sw) return;
-			const set = (message: string) => (interstitial.$.state.status = message);
-			const apply = () => {
-				switch (sw.state) {
-					case "installing":
-						set("Installing game service worker...");
-						break;
-					case "installed":
-						set("Service worker installed...");
-						break;
-					case "activating":
-						set("Activating game session...");
-						break;
-					case "activated":
-						set("Game session ready...");
-						break;
-					case "redundant":
-						set("Service worker replaced...");
-						break;
-				}
-			};
-			apply();
-			sw.addEventListener("statechange", apply);
-		};
-
-		updateStatus(registration.installing ?? registration.waiting ?? null);
-		interstitial.$.state.status = "Waiting for game session...";
 		await waitForControllerOrReady(10000);
-		interstitial.$.state.status = "Connecting game controller...";
 
 		const readySw = navigator.serviceWorker.controller ?? registration.active;
 		if (!readySw) {
@@ -104,19 +91,13 @@ async function init() {
 			scramjetConfig: defaultConfig,
 		});
 
-		await controller.wait();
-		interstitial.close();
+		await withTimeout(controller.wait(), 20000, "Scramjet controller startup");
+		return controller;
 	} catch (error) {
 		console.error("Cork7 player initialization failed:", error);
-		try {
-			interstitial.close();
-		} catch {}
-		app.innerText =
-			"Could not start the Cork7 player. Refresh the page or open the official game directly.";
-		setTimeout(() => {
-			const status = document.getElementById("game-status");
-			if (status) status.textContent = "PLAYER INIT FAILED";
-		}, 0);
+		const status = document.getElementById("game-status");
+		if (status) status.textContent = "PLAYER INIT FAILED";
+		throw error;
 	}
 }
 
@@ -135,5 +116,6 @@ async function mount() {
 	}
 }
 
-void init().then(() => mount());
+export const controllerReady = init();
+void mount();
 export { controller, cachePlugin };

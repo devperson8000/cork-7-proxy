@@ -6,6 +6,7 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<meta name="theme-color" content="#090d12" />
 		<meta name="color-scheme" content="dark" />
+		<meta name="c7-build" content="c7-diagnostics-2026-11-09-1" />
 		<title>Cork7 // Game Session</title>
 		<style>
 			html, body { margin: 0; min-height: 100%; background: #080b10; color: #edf2f7; }
@@ -54,6 +55,7 @@
 				var logs = [];
 				var labels = {
 					html: "HTML document",
+					build: "Build fingerprint",
 					scramjetScript: "Scramjet script",
 					controllerApi: "Controller API script",
 					moduleEntry: "Application module",
@@ -197,6 +199,7 @@
 
 				document.addEventListener("DOMContentLoaded", function () {
 					if (!statuses.html) set("html", "ok", document.readyState + " · " + location.pathname);
+					set("build", "ok", "c7-diagnostics-2026-11-09-1 · Diagnostic HTML fingerprint present");
 					if (!statuses.moduleRuntime) set("moduleRuntime", "pending", "Waiting for application entrypoint");
 					if (!statuses.serviceWorker) set("serviceWorker", "pending", "Waiting for application registration");
 					if (!statuses.controller) set("controller", "pending", "Waiting for application initialization");
@@ -217,7 +220,7 @@
 					probe("swControllerAsset", "/c7/controller/controller.sw.js", "javascript");
 					probe("injectAsset", "/c7/controller/controller.inject.js", "javascript");
 					probe("wasmAsset", "/c7/scramjet/scramjet.wasm", "application/wasm");
-					probe("backend", "https://p01--cork7--yf5q7tyyggsr.code.run/health", "application/json");
+					probe("backend", "/c7-health", "application/json");
 					if ("serviceWorker" in navigator) {
 						navigator.serviceWorker.addEventListener("controllerchange", function () {
 							set("swControl", "ok", "Browser reports an active service-worker controller");
@@ -257,12 +260,13 @@
 	<body>
 		<aside id="c7-diagnostics" role="region" aria-label="Cork7 runtime diagnostics">
 			<div class="c7-head">
-				<span class="c7-title">C7 // RUNTIME DIAGNOSTICS</span>
+				<span class="c7-title">C7 // RUNTIME DIAGNOSTICS · c7-diagnostics-2026-11-09-1</span>
 				<span id="c7-diagnostics-summary" class="c7-summary">HTML RECEIVED · CHECKS STARTING</span>
 				<button type="button" onclick="window.C7Diagnostics && C7Diagnostics.copyReport()">COPY REPORT</button>
 			</div>
 			<div class="c7-subtitle">This panel is part of the raw HTML and remains visible if the player JavaScript or service worker fails.</div>
 			<div class="c7-grid">
+				<div class="c7-row" id="c7-check-build" data-state="ok"><span class="c7-name">Build fingerprint</span><span class="c7-state">OK</span><span class="c7-detail">c7-diagnostics-2026-11-09-1 · This exact HTML build is being served</span></div>
 				<div class="c7-row" id="c7-check-html" data-state="ok"><span class="c7-name">HTML document</span><span class="c7-state">OK</span><span class="c7-detail">Document delivered by server</span></div>
 				<div class="c7-row" id="c7-check-scramjetScript" data-state="pending"><span class="c7-name">Scramjet script</span><span class="c7-state">WAIT</span><span class="c7-detail">Waiting for script load</span></div>
 				<div class="c7-row" id="c7-check-controllerApi" data-state="pending"><span class="c7-name">Controller API script</span><span class="c7-state">WAIT</span><span class="c7-detail">Waiting for script load</span></div>

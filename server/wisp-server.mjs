@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import tls from "node:tls";
+import dns from "node:dns/promises";
 import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 
 const HOST = "0.0.0.0";
@@ -145,7 +146,7 @@ function readHtmlAttribute(tag, name) {
   return null;
 }
 
-function probeCork7Tls(timeoutMs = 5000) {
+function probeCork7TlsAddress(addressInfo, timeoutMs = 5000) {
   return new Promise((resolve) => {
     let settled = false;
     let socket;
@@ -154,11 +155,16 @@ function probeCork7Tls(timeoutMs = 5000) {
       if (settled) return;
       settled = true;
       if (socket && !socket.destroyed) socket.destroy();
-      resolve(result);
+      resolve({
+        address: addressInfo.address,
+        family: addressInfo.family,
+        ...result
+      });
     };
 
     socket = tls.connect({
-      host: CORK7_TLS_HOST,
+      host: addressInfo.address,
+      family: addressInfo.family,
       port: 443,
       servername: CORK7_TLS_HOST,
       rejectUnauthorized: true
@@ -168,7 +174,7 @@ function probeCork7Tls(timeoutMs = 5000) {
       finish({
         ok: false,
         code: "ETIMEDOUT",
-        error: "TLS connection to " + CORK7_TLS_HOST + ":443 timed out after " + timeoutMs + "ms"
+        error: "TLS connection to " + addressInfo.address + ":443 timed out after " + timeoutMs + "ms"
       });
     });
 
@@ -189,6 +195,50 @@ function probeCork7Tls(timeoutMs = 5000) {
       });
     });
   });
+}
+
+async function probeCork7Tls() {
+  let addresses;
+  try {
+    // Match the exact ordering Wisp uses below. Wisp's lookup_ip() selects
+    // one result, so a hostname-level TLS probe alone can hide a bad first IP.
+    addresses = await dns.lookup(CORK7_TLS_HOST, {
+      all: true,
+      order: "ipv4first"
+    });
+  } catch (error) {
+    return {
+      ok: false,
+      code: error.code ?? null,
+      error: error.message,
+      addressSelection: "ipv4first",
+      dnsAddresses: []
+    };
+  }
+
+  if (addresses.length === 0) {
+    return {
+      ok: false,
+      code: "ENODATA",
+      error: "DNS returned no addresses for " + CORK7_TLS_HOST,
+      addressSelection: "ipv4first",
+      dnsAddresses: []
+    };
+  }
+
+  // Test each resolved IP directly while retaining the Cork7 SNI hostname
+  // and strict certificate verification. The first result is Wisp's choice.
+  const addressResults = await Promise.all(
+    addresses.map((address) => probeCork7TlsAddress(address))
+  );
+  const selected = addressResults[0];
+
+  return {
+    ...selected,
+    addressSelection: "ipv4first",
+    wispSelectedAddress: selected.address,
+    dnsAddresses: addressResults
+  };
 }
 
 async function inspectPlayerBuild() {
@@ -368,6 +418,9 @@ wisp.options.allow_tcp_streams = true;
 wisp.options.stream_limit_per_host = 16;
 wisp.options.stream_limit_total = 64;
 wisp.options.wisp_version = 2;
+// Wisp resolves a single address per stream; prefer IPv4 instead of relying
+// on a potentially unreachable first IPv6 answer from container networking.
+wisp.options.dns_result_order = "ipv4first";
 
 logging.set_level(logging.INFO);
 

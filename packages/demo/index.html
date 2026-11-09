@@ -132,7 +132,7 @@
 								set(id, "warn", "Unexpected content type · " + detail);
 							} else if (id === "backend") {
 								return response.clone().json().then(function (body) {
-									if (body.status !== "ok" || body.playerReady === false) {
+									if (body.status !== "ok" || body.playerReady !== true) {
 										set(id, "error", "Health response invalid · playerReady=" + String(body.playerReady));
 									} else {
 										set(id, "ok", detail + " · playerReady=" + String(body.playerReady));

@@ -429,6 +429,36 @@ function probeWispTls(timeoutMs = 12000) {
 }
 
 
+let wispTlsProbeCache = null;
+let wispTlsProbeCacheExpiresAt = 0;
+let wispTlsProbeInFlight = null;
+
+function getWispTlsProbe() {
+  const now = Date.now();
+  if (wispTlsProbeCache && now < wispTlsProbeCacheExpiresAt) {
+    return Promise.resolve(wispTlsProbeCache);
+  }
+  if (wispTlsProbeInFlight) return wispTlsProbeInFlight;
+
+  wispTlsProbeInFlight = probeWispTls()
+    .then((result) => {
+      wispTlsProbeCache = result;
+      wispTlsProbeCacheExpiresAt = Date.now() + 15000;
+      return result;
+    })
+    .catch((error) => ({
+      ok: false,
+      stage: "probe",
+      code: error?.code ?? null,
+      error: error instanceof Error ? error.message : String(error)
+    }))
+    .finally(() => {
+      wispTlsProbeInFlight = null;
+    });
+
+  return wispTlsProbeInFlight;
+}
+
 async function inspectPlayerBuild() {
   try {
     const html = await fs.readFile(PLAYER_INDEX, "utf8");
@@ -629,7 +659,7 @@ const server = http.createServer(async (request, response) => {
     const [playerDiagnostics, cork7TlsProbe, wispTlsProbe] = await Promise.all([
       inspectPlayerBuild(),
       probeCork7Tls(),
-      probeWispTls()
+      getWispTlsProbe()
     ]);
     response.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
@@ -708,7 +738,7 @@ server.on("upgrade", (request, socket, head) => {
 
   activeWsConnections += 1;
   console.info(
-    `Accepted Wisp upgrade from ${origin}; protocol=${request.headers["sec-websocket-protocol"] ?? "(none)"}; active=${activeWsConnections}`
+    `Accepted Wisp upgrade from ${internalHealthProbe ? "internal health probe" : origin}; protocol=${request.headers["sec-websocket-protocol"] ?? "(none)"}; active=${activeWsConnections}`
   );
   let counted = true;
   const releaseConnection = () => {

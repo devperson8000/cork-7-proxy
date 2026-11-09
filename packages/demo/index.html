@@ -62,6 +62,7 @@
 					moduleRuntime: "JavaScript startup",
 					backend: "Northflank health API",
 					targetTls: "Cork7 target TLS probe",
+					wispTls: "Wisp-routed Cork7 TLS probe",
 					swAsset: "Player service-worker file",
 					swControllerAsset: "Controller worker file",
 					injectAsset: "Scramjet inject script",
@@ -205,6 +206,7 @@
 					if (!statuses.moduleRuntime) set("moduleRuntime", "pending", "Waiting for application entrypoint");
 					if (!statuses.serviceWorker) set("serviceWorker", "pending", "Waiting for application registration");
 					if (!statuses.targetTls) set("targetTls", "pending", "Waiting for Northflank TLS probe");
+					if (!statuses.wispTls) set("wispTls", "pending", "Waiting for end-to-end Wisp TLS probe");
 					if (!statuses.controller) set("controller", "pending", "Waiting for application initialization");
 					if (!statuses.wisp) set("wisp", "pending", "Waiting for Wisp protocol test");
 					if (!statuses.game) set("game", "pending", "Waiting for player frame");
@@ -277,6 +279,7 @@
 				<div class="c7-row" id="c7-check-moduleRuntime" data-state="pending"><span class="c7-name">JavaScript startup</span><span class="c7-state">WAIT</span><span class="c7-detail">Waiting for app entrypoint</span></div>
 				<div class="c7-row" id="c7-check-app" data-state="pending"><span class="c7-name">Player interface</span><span class="c7-state">WAIT</span><span class="c7-detail">Waiting for interface mount</span></div>
 				<div class="c7-row" id="c7-check-targetTls" data-state="pending"><span class="c7-name">Cork7 target TLS</span><span class="c7-state">WAIT</span><span class="c7-detail">Waiting for Northflank TLS probe</span></div>
+				<div class="c7-row" id="c7-check-wispTls" data-state="pending"><span class="c7-name">Wisp-routed Cork7 TLS</span><span class="c7-state">WAIT</span><span class="c7-detail">Waiting for end-to-end Wisp TLS probe</span></div>
 				<div class="c7-row" id="c7-check-backend" data-state="pending"><span class="c7-name">Northflank health API</span><span class="c7-state">WAIT</span><span class="c7-detail">Checking backend</span></div>
 				<div class="c7-row" id="c7-check-swAsset" data-state="pending"><span class="c7-name">Player service-worker file</span><span class="c7-state">WAIT</span><span class="c7-detail">Checking /c7/sw.js</span></div>
 				<div class="c7-row" id="c7-check-swControllerAsset" data-state="pending"><span class="c7-name">Controller worker file</span><span class="c7-state">WAIT</span><span class="c7-detail">Checking controller.sw.js</span></div>

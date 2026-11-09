@@ -6,6 +6,8 @@ import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import tls from "node:tls";
 import dns from "node:dns/promises";
+import { Duplex } from "node:stream";
+import { client as WispClient } from "@mercuryworkshop/wisp-js/client";
 import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 
 const HOST = "0.0.0.0";
@@ -107,6 +109,11 @@ function readPositiveInteger(value, variableName, fallback, max = 500) {
   }
 
   return parsed;
+}
+
+function isLoopbackAddress(value) {
+  const address = String(value ?? "").toLowerCase().replace(/^::ffff:/, "");
+  return address === "::1" || address === "127.0.0.1" || address.startsWith("127.");
 }
 
 function rejectUpgrade(socket, status, reason) {
@@ -240,6 +247,187 @@ async function probeCork7Tls() {
     dnsAddresses: addressResults
   };
 }
+
+// Exercises the actual Wisp TCP relay, not just Node's direct TLS connection.
+// This self-test connects through the local Wisp WebSocket and performs a real
+// TLS handshake plus HTTP request to the single permitted Cork7 destination.
+function probeWispTls(timeoutMs = 12000) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let stage = "wisp-websocket";
+    let connection = null;
+    let secureSocket = null;
+    let responseText = "";
+    const timeout = setTimeout(() => {
+      finish({
+        ok: false,
+        stage,
+        code: "ETIMEDOUT",
+        error: "Wisp-routed Cork7 TLS probe timed out after " + timeoutMs + "ms"
+      });
+    }, timeoutMs);
+    timeout.unref?.();
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      try { secureSocket?.destroy(); } catch {}
+      try { connection?.close(); } catch {}
+      resolve(result);
+    };
+
+    try {
+      connection = new WispClient.ClientConnection(
+        "ws://127.0.0.1:" + port + WISP_PATH
+      );
+    } catch (error) {
+      finish({
+        ok: false,
+        stage,
+        code: error.code ?? null,
+        error: error.message
+      });
+      return;
+    }
+
+    connection.onerror = () => {
+      finish({
+        ok: false,
+        stage,
+        error: "Local Wisp client reported a WebSocket/protocol error"
+      });
+    };
+
+    connection.onclose = () => {
+      if (!settled) {
+        finish({
+          ok: false,
+          stage,
+          error: "Local Wisp WebSocket closed before the TLS/HTTP probe completed"
+        });
+      }
+    };
+
+    connection.onopen = () => {
+      if (settled) return;
+      stage = "wisp-tcp";
+      let stream;
+      try {
+        stream = connection.create_stream(CORK7_TLS_HOST, 443);
+      } catch (error) {
+        finish({
+          ok: false,
+          stage,
+          code: error.code ?? null,
+          error: error.message
+        });
+        return;
+      }
+
+      const relay = new Duplex({
+        read() {},
+        write(chunk, _encoding, callback) {
+          try {
+            stream.send(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength));
+            callback();
+          } catch (error) {
+            callback(error);
+          }
+        },
+        final(callback) {
+          try { stream.close(); } catch {}
+          callback();
+        },
+        destroy(error, callback) {
+          try { stream.close(); } catch {}
+          callback(error);
+        }
+      });
+
+      stream.onmessage = (data) => {
+        if (!relay.destroyed) relay.push(Buffer.from(data));
+      };
+      stream.onclose = (reason) => {
+        if (!relay.destroyed) relay.push(null);
+        if (!settled && stage === "wisp-tcp") {
+          finish({
+            ok: false,
+            stage,
+            closeReason: reason ?? null,
+            error: "Wisp closed the Cork7 TCP stream before TLS completed"
+          });
+        }
+      };
+
+      stage = "tls-handshake";
+      try {
+        secureSocket = tls.connect({
+          socket: relay,
+          servername: CORK7_TLS_HOST,
+          rejectUnauthorized: true,
+          ALPNProtocols: ["http/1.1"]
+        });
+      } catch (error) {
+        finish({
+          ok: false,
+          stage,
+          code: error.code ?? null,
+          error: error.message
+        });
+        return;
+      }
+
+      secureSocket.once("secureConnect", () => {
+        if (settled) return;
+        stage = "http-request";
+        secureSocket.write(
+          "GET / HTTP/1.1\\r\\n" +
+          "Host: " + CORK7_TLS_HOST + "\\r\\n" +
+          "Connection: close\\r\\n" +
+          "User-Agent: Cork7-Wisp-Health-Probe\\r\\n" +
+          "Accept: */*\\r\\n\\r\\n"
+        );
+      });
+
+      secureSocket.on("data", (chunk) => {
+        responseText += chunk.toString("latin1");
+        if (responseText.length > 8192) responseText = responseText.slice(0, 8192);
+        const statusMatch = responseText.match(/^HTTP\\/\\d(?:\\.\\d)?\\s+(\\d{3})/);
+        if (statusMatch) {
+          finish({
+            ok: true,
+            stage: "http-response",
+            protocol: secureSocket.getProtocol(),
+            authorized: secureSocket.authorized === true,
+            httpStatus: Number(statusMatch[1]),
+            responseHeadersReceived: responseText.includes("\\r\\n\\r\\n")
+          });
+        }
+      });
+
+      secureSocket.once("error", (error) => {
+        finish({
+          ok: false,
+          stage,
+          code: error.code ?? null,
+          error: error.message
+        });
+      });
+
+      secureSocket.once("close", () => {
+        if (!settled) {
+          finish({
+            ok: false,
+            stage,
+            error: "TLS socket closed before an HTTP response was received"
+          });
+        }
+      });
+    };
+  });
+}
+
 
 async function inspectPlayerBuild() {
   try {
@@ -438,9 +626,10 @@ const server = http.createServer(async (request, response) => {
 
   if (request.method === "GET" && pathname === "/health") {
     setHealthCors(request, response, allowedOrigins);
-    const [playerDiagnostics, cork7TlsProbe] = await Promise.all([
+    const [playerDiagnostics, cork7TlsProbe, wispTlsProbe] = await Promise.all([
       inspectPlayerBuild(),
-      probeCork7Tls()
+      probeCork7Tls(),
+      probeWispTls()
     ]);
     response.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
@@ -454,6 +643,7 @@ const server = http.createServer(async (request, response) => {
         playerReady: playerDiagnostics.playerReady,
         playerDiagnostics,
         cork7TlsProbe,
+        wispTlsProbe,
         websocketPath: WISP_PATH
       })
     );
@@ -502,7 +692,10 @@ server.on("upgrade", (request, socket, head) => {
     origin = "";
   }
 
-  if (!origin || !allowedOrigins.has(origin)) {
+  const internalHealthProbe =
+    !originHeader && isLoopbackAddress(request.socket.remoteAddress);
+
+  if ((!origin || !allowedOrigins.has(origin)) && !internalHealthProbe) {
     console.warn(`Rejected Wisp upgrade: origin "${originHeader ?? "(missing)"}" is not allowed.`);
     rejectUpgrade(socket, 403, "Forbidden");
     return;

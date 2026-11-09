@@ -30,7 +30,7 @@ async function checkBackend() {
 
 function checkWebSocket() {
 	setStatus("ws-status", "CONNECTING", "pending");
-	let connection: ClientConnection;
+	let connection: InstanceType<typeof WispClient.ClientConnection>;
 	try {
 		// Use the real Wisp client so the v2 subprotocol and INFO/CONTINUE
 		// handshake are tested, rather than only testing a bare WebSocket.

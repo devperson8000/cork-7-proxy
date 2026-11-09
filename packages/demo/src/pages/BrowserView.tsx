@@ -110,34 +110,98 @@ const BrowserView: Component<
 		document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
 		updateFullscreenButton();
 
-		const showStartupError = () => {
+		const diagnosticOutput = gameRoot?.querySelector<HTMLElement>(".diagnostics-output");
+		const diagnosticsPanel = gameRoot?.querySelector<HTMLDetailsElement>(".diagnostics-panel");
+		const copyDiagnosticsButton = gameRoot?.querySelector<HTMLButtonElement>(".diagnostics-copy");
+
+		const renderDiagnostics = () => {
+			if (!diagnosticOutput) return;
+			const entries = window.__C7_DIAGNOSTICS__ ?? [];
+			diagnosticOutput.textContent = entries.length
+				? entries.map((entry) =>
+					`[${new Date(entry.time).toLocaleTimeString()}] [${entry.status.toUpperCase()}] ${entry.stage}\n${entry.detail}`
+				).join("\\n\\n")
+				: "Waiting for startup diagnostics…";
+			if (diagnosticsPanel && entries.some((entry) => entry.status === "error")) {
+				diagnosticsPanel.open = true;
+			}
+		};
+
+		window.addEventListener("c7:diagnostic", renderDiagnostics);
+		copyDiagnosticsButton?.addEventListener("click", async () => {
+			try {
+				await navigator.clipboard.writeText(diagnosticOutput?.textContent ?? "No diagnostics available.");
+				copyDiagnosticsButton.textContent = "Copied";
+			} catch {
+				copyDiagnosticsButton.textContent = "Copy unavailable";
+			}
+		});
+		renderDiagnostics();
+
+		const reportFrameDiagnostic = (
+			stage: string,
+			status: "working" | "ok" | "warning" | "error",
+			detail: string,
+		) => {
+			const entries = window.__C7_DIAGNOSTICS__ ?? [];
+			entries.push({ time: new Date().toISOString(), stage, status, detail });
+			window.__C7_DIAGNOSTICS__ = entries.slice(-40);
+			window.dispatchEvent(new CustomEvent("c7:diagnostic", { detail: entries[entries.length - 1] }));
+		};
+
+		const showStartupError = (stage: string, error: unknown) => {
+			const detail = error instanceof Error ? error.message : String(error);
+			reportFrameDiagnostic(stage, "error", error instanceof Error ? (error.stack ?? detail) : detail);
 			gameRoot?.classList.add("is-error");
 			if (loadingTitle) loadingTitle.textContent = "PLAYER UNAVAILABLE";
-			if (loadingDetail) loadingDetail.textContent = "Refresh the page to reconnect to Cork7.";
+			if (loadingDetail) loadingDetail.textContent = detail.slice(0, 150);
 		};
 
 		try {
+			reportFrameDiagnostic("Game frame", "working", "Waiting for the Scramjet controller.");
 			const controller = await controllerReady;
+			reportFrameDiagnostic("Game frame", "ok", "Controller promise resolved; creating the iframe frame.");
 			const frame: Frame = controller.createFrame(this.frameel);
+			reportFrameDiagnostic("Iframe bootstrap", "working", "Loading the initial blank frame.");
 
+			let navigationStarted = false;
 			const hideLoading = () => {
 				gameRoot?.classList.add("is-loaded");
+				reportFrameDiagnostic(
+					"Iframe navigation",
+					"ok",
+					`Frame load event received. Current path: ${new URL(this.frameel.src).pathname}`,
+				);
 			};
 			const navigate = () => {
+				if (navigationStarted) return;
+				navigationStarted = true;
+				reportFrameDiagnostic("Game navigation", "working", "Starting the configured game URL.");
 				this.frameel.addEventListener("load", hideLoading, { once: true });
 				try {
-					frame.go(getSafeInitialUrl());
+					const targetUrl = getSafeInitialUrl();
+					reportFrameDiagnostic("Game target", "ok", `Host: ${new URL(targetUrl).host}`);
+					const navigation = frame.go(targetUrl);
+					Promise.resolve(navigation).catch((error) => {
+						console.error("Could not open the Cork7 game frame:", error);
+						showStartupError("Game navigation", error);
+					});
 				} catch (error) {
 					console.error("Could not open the Cork7 game frame:", error);
-					showStartupError();
+					showStartupError("Game navigation", error);
 				}
 			};
 
 			this.frameel.addEventListener("load", navigate, { once: true });
 			this.frameel.src = "about:blank";
+			window.setTimeout(() => {
+				if (!gameRoot?.classList.contains("is-loaded") && !gameRoot?.classList.contains("is-error")) {
+					reportFrameDiagnostic("Iframe navigation", "warning", "No iframe load event has arrived after 20 seconds.");
+				}
+			}, 20000);
 		} catch (error) {
 			console.error("Cork7 player initialization failed:", error);
-			showStartupError();
+			showStartupError("Game frame initialization", error);
 		}
 	};
 
@@ -156,6 +220,16 @@ const BrowserView: Component<
 				allowfullscreen
 				referrerpolicy="no-referrer"
 			></iframe>
+			<details class="diagnostics-panel" open>
+				<summary>
+					<span>Diagnostics</span>
+					<span class="diagnostics-indicator">Live report</span>
+				</summary>
+				<div class="diagnostics-body">
+					<pre class="diagnostics-output">Waiting for startup diagnostics…</pre>
+					<button class="diagnostics-copy" type="button">Copy report</button>
+				</div>
+			</details>
 			<button class="fullscreen-toggle" type="button" aria-label="Enter fullscreen" title="Enter fullscreen">
 				<svg class="fullscreen-enter-icon" viewBox="0 0 20 20" aria-hidden="true">
 					<path d="M7 3H3v4M13 3h4v4M3 13v4h4M17 13v4h-4" />
@@ -265,6 +339,68 @@ BrowserView.style = css`
 		color: #788d9b;
 		font-size: 11px;
 		letter-spacing: .02em;
+	}
+	.diagnostics-panel {
+		position: absolute;
+		z-index: 6;
+		left: 14px;
+		bottom: 14px;
+		width: min(520px, calc(100% - 28px));
+		max-height: min(44vh, 310px);
+		overflow: hidden;
+		border: 1px solid rgba(145, 174, 187, .26);
+		border-radius: 10px;
+		background: rgba(5, 10, 16, .94);
+		color: #dce9eb;
+		box-shadow: 0 10px 32px rgba(0, 0, 0, .34);
+		backdrop-filter: blur(14px);
+		-webkit-backdrop-filter: blur(14px);
+		font-size: 11px;
+	}
+	.diagnostics-panel summary {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 10px 12px;
+		color: #cde5e3;
+		font-weight: 800;
+		letter-spacing: .1em;
+		text-transform: uppercase;
+		cursor: pointer;
+		user-select: none;
+	}
+	.diagnostics-indicator {
+		color: #7895a2;
+		font-size: 9px;
+		letter-spacing: .08em;
+	}
+	.diagnostics-body {
+		padding: 0 10px 10px;
+	}
+	.diagnostics-output {
+		max-height: 220px;
+		margin: 0;
+		overflow: auto;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		color: #9db4c0;
+		font: 10px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	}
+	.diagnostics-copy {
+		margin-top: 9px;
+		padding: 6px 9px;
+		border: 1px solid rgba(145, 174, 187, .24);
+		border-radius: 7px;
+		background: rgba(43, 64, 74, .4);
+		color: #dce9eb;
+		font: inherit;
+		font-size: 10px;
+		cursor: pointer;
+	}
+	.diagnostics-copy:hover { background: rgba(70, 105, 112, .48); }
+	@media (max-width: 600px) {
+		.diagnostics-panel { left: 8px; bottom: 8px; width: calc(100% - 16px); }
 	}
 	.fullscreen-toggle {
 		position: absolute;

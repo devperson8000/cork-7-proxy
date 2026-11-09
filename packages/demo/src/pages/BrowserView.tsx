@@ -1,5 +1,5 @@
 import { css, type Component } from "dreamland/core";
-import { controller } from "..";
+import { controllerReady } from "..";
 import type { Frame } from "@mercuryworkshop/scramjet-controller";
 
 const CORK7_HOME = "https://cork7.com/";
@@ -37,11 +37,12 @@ const BrowserView: Component<
 > = function (cx) {
 	cx.mount = async () => {
 		try {
-			await controller.wait();
-
+			const controller = await controllerReady;
 			const frame: Frame = controller.createFrame(this.frameel);
 			const target = getSafeInitialUrl();
 
+			const status = document.getElementById("game-status");
+			if (status) status.textContent = "CONNECTING TO CORK7";
 			const navigate = () => frame.go(target);
 			this.frameel.addEventListener("load", navigate, { once: true });
 			this.frameel.src = "about:blank";

@@ -32,7 +32,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
 
 async function init(): Promise<InstanceType<typeof Controller>> {
 	const registration = await withTimeout(
-		navigator.serviceWorker.register("./sw.js", {
+		navigator.serviceWorker.register("/c7/sw.js", {
 			scope: "/c7/",
 			updateViaCache: "none",
 		}),

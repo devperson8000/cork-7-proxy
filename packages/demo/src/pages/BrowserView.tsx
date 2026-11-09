@@ -2,7 +2,45 @@ import { css, type Component } from "dreamland/core";
 import { controllerReady } from "..";
 import type { Frame } from "@mercuryworkshop/scramjet-controller";
 
-const CORK7_HOME = "https://cork7.com/";
+const DEFAULT_CORK7_HOME = "https://cork7.com/";
+const DEFAULT_ALLOWED_GAME_HOSTS = new Set([
+	"cork7.com",
+	"www.cork7.com",
+	"live.cork7.com",
+]);
+
+function getSafeInitialUrl(): string {
+	const runtimeConfig = (window as typeof window & {
+		CORK7_CONFIG?: { targetUrl?: unknown; allowedHosts?: unknown };
+	}).CORK7_CONFIG;
+	const configuredUrl =
+		typeof runtimeConfig?.targetUrl === "string"
+			? runtimeConfig.targetUrl
+			: DEFAULT_CORK7_HOME;
+	const allowedHosts = new Set(
+		Array.isArray(runtimeConfig?.allowedHosts)
+			? runtimeConfig.allowedHosts.filter((host): host is string => typeof host === "string")
+			: [...DEFAULT_ALLOWED_GAME_HOSTS],
+	);
+
+	try {
+		const target = new URL(configuredUrl);
+		if (
+			target.protocol === "https:" &&
+			!target.username &&
+			!target.password &&
+			(target.port === "" || target.port === "443") &&
+			allowedHosts.has(target.hostname.toLowerCase())
+		) {
+			return target.href;
+		}
+	} catch {
+		// Invalid runtime configuration falls back to the default Cork7 home.
+	}
+
+	console.error("CORK7_TARGET_URL is invalid or its host is not allowlisted; using the default Cork7 homepage.");
+	return DEFAULT_CORK7_HOME;
+}
 
 type WebkitFullscreenDocument = Document & {
 	webkitFullscreenElement?: Element | null;
@@ -88,7 +126,7 @@ const BrowserView: Component<
 			const navigate = () => {
 				this.frameel.addEventListener("load", hideLoading, { once: true });
 				try {
-					frame.go(CORK7_HOME);
+					frame.go(getSafeInitialUrl());
 				} catch (error) {
 					console.error("Could not open the Cork7 game frame:", error);
 					showStartupError();

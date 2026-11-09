@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 
 const HOST = "0.0.0.0";
@@ -89,6 +90,56 @@ function parseAllowedOrigins(value) {
 	return new Set(
 		parseCsv(value, "ALLOWED_ORIGINS").map(normalizeOrigin),
 	);
+}
+
+function parseTargetUrl(value, allowedHosts) {
+	const raw = String(value ?? "").trim();
+	if (!raw) throw new Error("CORK7_TARGET_URL must be a non-empty HTTPS URL.");
+
+	let target;
+	try {
+		target = new URL(raw);
+	} catch {
+		throw new Error("CORK7_TARGET_URL must be a valid absolute HTTPS URL.");
+	}
+
+	if (
+		target.protocol !== "https:" ||
+		target.username ||
+		target.password ||
+		(target.port !== "" && target.port !== "443")
+	) {
+		throw new Error("CORK7_TARGET_URL must use HTTPS on the standard port and cannot contain credentials.");
+	}
+
+	const hostname = target.hostname.toLowerCase().replace(/\.$/, "");
+	if (!allowedHosts.includes(hostname)) {
+		throw new Error(
+			"CORK7_TARGET_URL host \"" + hostname + "\" is not in CORK7_ALLOWED_HOSTS.",
+		);
+	}
+
+	target.hash = "";
+	return target.href;
+}
+
+function runtimeConfigScript(targetUrl, allowedHosts) {
+	const payload = JSON.stringify({
+		targetUrl,
+		allowedHosts,
+	})
+		.replace(/</g, "\\u003c")
+		.replace(/\u2028/g, "\\u2028")
+		.replace(/\u2029/g, "\\u2029");
+	return "<script>window.CORK7_CONFIG = Object.freeze(" + payload + ");</script>";
+}
+
+function injectRuntimeConfig(html, targetUrl, allowedHosts) {
+	const marker = "</head>";
+	const position = html.toLowerCase().lastIndexOf(marker);
+	const script = runtimeConfigScript(targetUrl, allowedHosts);
+	if (position === -1) return script + html;
+	return html.slice(0, position) + script + html.slice(position);
 }
 
 function readPositiveInteger(value, variableName, fallback, max = 500) {
@@ -222,10 +273,11 @@ async function servePlayerAsset(pathname, response) {
 
 		const extension = path.extname(filePath).toLowerCase();
 		const relative = path.relative(STATIC_ROOT, filePath).split(path.sep).join("/");
+		const isIndex = relative === "index.html";
 		const isFingerprintedAsset =
 			/^assets\/.+-[a-zA-Z0-9_-]{6,}\.(?:js|css)$/.test(relative);
 		const mustRevalidate =
-			relative === "index.html" ||
+			isIndex ||
 			relative === "sw.js" ||
 			relative.startsWith("controller/") ||
 			relative.startsWith("scramjet/");
@@ -234,7 +286,20 @@ async function servePlayerAsset(pathname, response) {
 			: mustRevalidate
 				? "no-cache"
 				: "public, max-age=86400";
-		const etag = '"' + info.size.toString(16) + "-" + Math.trunc(info.mtimeMs).toString(16) + '"';
+
+		const content = isIndex
+			? Buffer.from(
+				injectRuntimeConfig(
+					await fs.readFile(filePath, "utf8"),
+					targetUrl,
+					allowedHosts,
+				),
+				"utf8",
+			)
+			: await fs.readFile(filePath);
+		const etag = isIndex
+			? '"' + createHash("sha256").update(content).digest("base64url") + '"'
+			: '"' + info.size.toString(16) + "-" + Math.trunc(info.mtimeMs).toString(16) + '"';
 		const validators = {
 			ETag: etag,
 			"Last-Modified": info.mtime.toUTCString(),
@@ -254,9 +319,9 @@ async function servePlayerAsset(pathname, response) {
 		response.writeHead(200, {
 			...validators,
 			"Content-Type": MIME_TYPES[extension] ?? "application/octet-stream",
-			"Content-Length": info.size,
+			"Content-Length": content.byteLength,
 		});
-		response.end(await fs.readFile(filePath));
+		response.end(content);
 	} catch {
 		response.writeHead(404, {
 			"Content-Type": "text/plain; charset=utf-8",
@@ -271,6 +336,10 @@ const allowedHosts = parseAllowedHosts(
 );
 const allowedOrigins = parseAllowedOrigins(
 	process.env.ALLOWED_ORIGINS ?? DEFAULT_ALLOWED_ORIGINS,
+);
+const targetUrl = parseTargetUrl(
+	process.env.CORK7_TARGET_URL ?? "https://cork7.com/",
+	allowedHosts,
 );
 const port = readPositiveInteger(process.env.PORT, "PORT", 3000, 65535);
 const maxWsConnections = readPositiveInteger(

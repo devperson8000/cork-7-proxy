@@ -49,10 +49,19 @@ const BrowserView: Component<
 			const navigate = () => {
 				diagnostics?.set("game", "pending", "Navigating to the fixed official Cork7 homepage");
 				diagnostics?.log("Starting game frame navigation to " + target);
-				frame.go(target);
 				this.frameel.addEventListener("load", () => {
-					diagnostics?.set("game", "ok", "Game frame emitted a load event after navigation");
+					try {
+						const bodyText = this.frameel.contentDocument?.body?.innerText || "";
+						if (bodyText.includes("Internal Service Worker Error")) {
+							diagnostics?.set("game", "error", bodyText.slice(0, 700));
+						} else {
+							diagnostics?.set("game", "ok", "Frame loaded · " + (this.frameel.contentWindow?.location.pathname || "path unavailable"));
+						}
+					} catch {
+						diagnostics?.set("game", "warn", "Frame emitted a load event; its document could not be inspected");
+					}
 				}, { once: true });
+				frame.go(target);
 			};
 			this.frameel.addEventListener("load", navigate, { once: true });
 			this.frameel.src = "about:blank";

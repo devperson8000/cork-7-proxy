@@ -66,6 +66,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
 }
 
 async function init(): Promise<InstanceType<typeof Controller>> {
+	let serviceWorkerRegistered = false;
 	try {
 		diagnostics?.set("serviceWorker", "pending", "Registering /c7/sw.js with scope /c7/");
 		const registration = await withTimeout(
@@ -76,6 +77,7 @@ async function init(): Promise<InstanceType<typeof Controller>> {
 			20000,
 			"Service worker registration"
 		);
+		serviceWorkerRegistered = true;
 		diagnostics?.set(
 			"serviceWorker",
 			"ok",
@@ -93,6 +95,7 @@ async function init(): Promise<InstanceType<typeof Controller>> {
 				: "No controller on this document yet; using active registration worker"
 		);
 		if (!readySw) {
+			diagnostics?.set("swControl", "error", "Registration has no active service worker");
 			throw new Error("No active service worker is available.");
 		}
 
@@ -115,6 +118,9 @@ async function init(): Promise<InstanceType<typeof Controller>> {
 		return controller;
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
+		if (!serviceWorkerRegistered) {
+			diagnostics?.set("serviceWorker", "error", message);
+		}
 		diagnostics?.set("controller", "error", message);
 		diagnostics?.log("Controller initialization failed: " + message);
 		console.error("Cork7 player initialization failed:", error);

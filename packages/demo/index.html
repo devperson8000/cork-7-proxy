@@ -129,10 +129,22 @@
 								set(id, "error", detail);
 							} else if (expected && contentType.indexOf(expected) === -1) {
 								set(id, "warn", "Unexpected content type · " + detail);
+							} else if (id === "backend") {
+								return response.clone().json().then(function (body) {
+									if (body.status !== "ok" || body.playerReady === false) {
+										set(id, "error", "Health response invalid · playerReady=" + String(body.playerReady));
+									} else {
+										set(id, "ok", detail + " · playerReady=" + String(body.playerReady));
+									}
+								}).catch(function (error) {
+									set(id, "error", "Health JSON could not be read · " + String(error));
+								}).finally(function () {
+									if (response.body && response.body.cancel) response.body.cancel().catch(function () {});
+								});
 							} else {
 								set(id, "ok", detail);
 							}
-							if (response.body && response.body.cancel) {
+							if (id !== "backend" && response.body && response.body.cancel) {
 								response.body.cancel().catch(function () {});
 							}
 						})

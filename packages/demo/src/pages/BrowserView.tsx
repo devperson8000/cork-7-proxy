@@ -120,7 +120,7 @@ const BrowserView: Component<
 			diagnosticOutput.textContent = entries.length
 				? entries.map((entry) =>
 					`[${new Date(entry.time).toLocaleTimeString()}] [${entry.status.toUpperCase()}] ${entry.stage}\n${entry.detail}`
-				).join("\\n\\n")
+				).join("\n\n")
 				: "Waiting for startup diagnostics…";
 			if (diagnosticsPanel && entries.some((entry) => entry.status === "error")) {
 				diagnosticsPanel.open = true;

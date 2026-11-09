@@ -1,159 +1,22 @@
 import { css, type Component } from "dreamland/core";
 import BrowserView from "./pages/BrowserView";
-import { demoSettingsStore } from "./store";
-import { client as WispClient } from "@mercuryworkshop/wisp-js/client";
 
-const HEALTH_URL = "/c7-health";
-
-function setStatus(id: string, value: string, state: string) {
-	const element = document.getElementById(id);
-	if (!element) return;
-	element.textContent = value;
-	element.setAttribute("data-state", state);
-}
-
-async function checkBackend() {
-	const diagnostics = (window as any).C7Diagnostics;
-	diagnostics?.set("backend", "pending", "Requesting Northflank /health");
-	try {
-		const response = await fetch(HEALTH_URL, {
-			cache: "no-store",
-			mode: "cors",
-		});
-		if (!response.ok) throw new Error(`Health check returned HTTP ${response.status}`);
-		const body = await response.json();
-		if (body.status !== "ok") throw new Error("Unexpected health response");
-		const tlsProbe = body.cork7TlsProbe;
-		if (tlsProbe && typeof tlsProbe.ok === "boolean") {
-			const tlsDetail = tlsProbe.ok
-				? "Wisp IP " + (tlsProbe.wispSelectedAddress || tlsProbe.address || "unknown") + " · " + (tlsProbe.protocol || "TLS") + " · IPv4-first"
-				: "Wisp IP TLS failed · " + (tlsProbe.address || "DNS unavailable") + " · " + (tlsProbe.code || "unknown") + " · " + (tlsProbe.error || "no detail");
-			diagnostics?.set("targetTls", tlsProbe.ok ? "ok" : "error", tlsDetail);
-		} else {
-			diagnostics?.set("targetTls", "warn", "TLS probe is not present; the latest Northflank server build is required");
-		}
-		if (body.playerReady !== true) {
-			throw new Error("Backend build verification failed: " + JSON.stringify(body.playerDiagnostics ?? body));
-		}
-		const detail = `HTTP ${response.status} · build=${body.playerDiagnostics?.buildId || "unknown"} · TLS=${tlsProbe?.ok === true ? "OK" : tlsProbe?.ok === false ? "FAILED" : "not checked"} · verified assets present · WS path ${body.websocketPath || "unknown"}`;
-		diagnostics?.set("backend", "ok", detail);
-		setStatus("backend-status", "ONLINE", "ok");
-		void fetch("https://p01--cork7--yf5q7tyyggsr.code.run/wisp-tls-health", {
-			cache: "no-store",
-			mode: "cors",
-		}).then(async (probeResponse) => {
-			if (!probeResponse.ok) throw new Error("Wisp TLS probe returned HTTP " + probeResponse.status);
-			const probeBody = await probeResponse.json();
-			const probe = probeBody.wispTlsProbe;
-			if (!probe || typeof probe.ok !== "boolean") throw new Error("Wisp TLS probe response was invalid");
-			const probeDetail = probe.ok
-				? "Wisp-routed TLS + HTTP succeeded · HTTP " + (probe.httpStatus || "response") + " · " + (probe.protocol || "TLS")
-				: "Failed at " + (probe.stage || "unknown stage") + " · " + (probe.code || "") + " · " + (probe.error || "no detail");
-			diagnostics?.set("wispTls", probe.ok ? "ok" : "error", probeDetail);
-		}).catch((probeError) => {
-			diagnostics?.set("wispTls", "error", probeError instanceof Error ? probeError.message : String(probeError));
-		});
-	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
-		diagnostics?.set("backend", "error", message);
-		console.warn("Cork7 backend health check failed:", error);
-		setStatus("backend-status", "CHECK CONNECTION", "error");
-	}
-}
-
-function checkWebSocket() {
-	const diagnostics = (window as any).C7Diagnostics;
-	diagnostics?.set("wisp", "pending", "Connecting to " + demoSettingsStore.wispUrl + " using Wisp v2");
-	setStatus("ws-status", "CONNECTING", "pending");
-	let connection: InstanceType<typeof WispClient.ClientConnection>;
-	try {
-		// Use the real Wisp client so the v2 subprotocol and INFO/CONTINUE
-		// handshake are tested, rather than only testing a bare WebSocket.
-		connection = new WispClient.ClientConnection(demoSettingsStore.wispUrl);
-	} catch (error) {
-		console.warn("Cork7 Wisp connection could not be created:", error);
-		diagnostics?.set("wisp", "error", error instanceof Error ? error.message : String(error));
-		setStatus("ws-status", "UNAVAILABLE", "error");
-		return;
-	}
-
-	let settled = false;
-	const timeout = window.setTimeout(() => {
-		if (settled) return;
-		settled = true;
-		diagnostics?.set("wisp", "error", "Wisp v2 handshake timed out after 8 seconds");
-		setStatus("ws-status", "TIMEOUT", "error");
-		connection.close();
-	}, 8000);
-
-	connection.onopen = () => {
-		if (settled) return;
-		settled = true;
-		window.clearTimeout(timeout);
-		diagnostics?.set("wisp", "ok", "Wisp protocol handshake completed successfully");
-		diagnostics?.log("Wisp v2 handshake completed.");
-		setStatus("ws-status", "CONNECTED", "ok");
-		connection.close();
-	};
-
-	connection.onerror = () => {
-		if (settled) return;
-		settled = true;
-		window.clearTimeout(timeout);
-		diagnostics?.set("wisp", "error", "WebSocket or Wisp protocol handshake failed");
-		setStatus("ws-status", "HANDSHAKE FAILED", "error");
-	};
-
-	connection.onclose = () => {
-		if (settled) return;
-		settled = true;
-		window.clearTimeout(timeout);
-		diagnostics?.set("wisp", "error", "Connection closed before Wisp handshake completed");
-		setStatus("ws-status", "CONNECTION CLOSED", "error");
-	};
-}
-
-const App: Component = function (cx) {
-	cx.mount = () => {
-		(window as any).C7Diagnostics?.set("app", "ok", "Main player UI mounted");
-		(window as any).C7Diagnostics?.log("Main player UI mounted.");
-		void checkBackend();
-		checkWebSocket();
-	};
-
+const App: Component = function () {
 	return (
 		<main class="player-shell">
 			<header class="topbar">
 				<div class="brand">
-					<span class="brand-mark">C7</span>
-					<div>
+					<div class="brand-mark" aria-hidden="true">C7</div>
+					<div class="brand-copy">
 						<div class="brand-title">CORK7</div>
-						<div class="brand-subtitle">DEDICATED GAME SESSION</div>
+						<div class="brand-subtitle">GAME PLAYER</div>
 					</div>
 				</div>
-				<div class="connection-status">
-					<div class="status-item">
-						<span class="status-label">BACKEND</span>
-						<strong id="backend-status" data-state="pending">CHECKING</strong>
-					</div>
-					<div class="status-item">
-						<span class="status-label">WSS</span>
-						<strong id="ws-status" data-state="pending">CHECKING</strong>
-					</div>
-				</div>
+				<div class="topbar-note">OFFICIAL GAME SESSION</div>
 			</header>
-			<section class="player-content">
-				<div class="game-label">
-					<span>GAME</span>
-					<strong id="game-status">LOADING CORK7</strong>
-					<a href="https://cork7.com/" target="_blank" rel="noopener noreferrer">OPEN OFFICIAL GAME</a>
-				</div>
+			<section class="player-content" aria-label="Cork7 game player">
 				<BrowserView />
 			</section>
-			<footer class="footer">
-				<span>ONE GAME · FIXED DESTINATION</span>
-				<span>CONNECTION STATUS IS SHOWN ABOVE</span>
-			</footer>
 		</main>
 	);
 };
@@ -162,120 +25,96 @@ App.style = css`
 	:scope {
 		position: fixed;
 		inset: 0;
-		width: 100%;
-		height: 100%;
-		min-height: 100vh;
-		box-sizing: border-box;
-		background: #080b10;
-		color: #edf2f7;
-		font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 		display: flex;
 		flex-direction: column;
+		width: 100%;
+		height: 100vh;
+		height: 100dvh;
+		min-height: 0;
+		overflow: hidden;
+		box-sizing: border-box;
+		background:
+			radial-gradient(1000px 520px at 50% -280px, rgba(56, 112, 112, .18), transparent 70%),
+			#080b10;
+		color: #edf3f7;
+		font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	}
 	.topbar {
-		min-height: 66px;
+		position: relative;
+		z-index: 2;
 		display: flex;
+		flex: 0 0 62px;
 		align-items: center;
 		justify-content: space-between;
-		gap: 18px;
-		padding: 0 22px;
-		border-bottom: 1px solid #202a36;
-		background: #0d131c;
+		gap: 16px;
+		padding: 0 clamp(16px, 2.2vw, 30px);
+		border-bottom: 1px solid rgba(126, 153, 174, .13);
+		background: rgba(9, 14, 21, .94);
 	}
 	.brand {
 		display: flex;
 		align-items: center;
-		gap: 12px;
+		gap: 11px;
+		min-width: 0;
 	}
 	.brand-mark {
-		width: 38px;
-		height: 38px;
 		display: grid;
+		width: 36px;
+		height: 36px;
+		flex: 0 0 36px;
 		place-items: center;
-		border: 1px solid #7db8ae;
-		border-radius: 9px;
-		color: #a8e3d6;
-		font-weight: 800;
-		letter-spacing: -1px;
-	}
-	.brand-title {
-		font-size: 13px;
-		font-weight: 800;
-		letter-spacing: .18em;
-	}
-	.brand-subtitle, .status-label, .game-label > span, .footer {
-		color: #8292a5;
-		font-size: 9px;
-		font-weight: 700;
-		letter-spacing: .14em;
-	}
-	.brand-subtitle { margin-top: 3px; }
-	.connection-status {
-		display: flex;
-		align-items: center;
-		gap: 20px;
-	}
-	.status-item {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		min-width: 96px;
-	}
-	.status-item strong {
-		font-size: 10px;
-		letter-spacing: .1em;
-		color: #d3dbe5;
-	}
-	.status-item strong[data-state="ok"] { color: #83d8a4; }
-	.status-item strong[data-state="error"] { color: #f0a0a0; }
-	.player-content {
-		flex: 1;
-		min-height: 0;
-		display: flex;
-		flex-direction: column;
-		padding: 12px 16px 10px;
-		gap: 10px;
-	}
-	.game-label {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		font-size: 10px;
-	}
-	.game-label strong {
-		font-size: 10px;
-		letter-spacing: .08em;
-		color: #e5edf5;
-	}
-	.game-label a {
-		margin-left: auto;
-		color: #91cfc2;
-		text-decoration: none;
-		font-size: 10px;
-	}
-	.game-label a:hover { text-decoration: underline; }
-	.game-frame {
-		flex: 1;
-		min-height: 0;
-		border: 1px solid #263342;
+		border: 1px solid rgba(151, 215, 203, .48);
 		border-radius: 10px;
-		overflow: hidden;
-		background: #05080c;
+		background: linear-gradient(145deg, rgba(121, 191, 178, .16), rgba(27, 47, 57, .38));
+		color: #b6e7dc;
+		font-size: 14px;
+		font-weight: 850;
+		letter-spacing: -.08em;
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 4px 16px rgba(0, 0, 0, .18);
 	}
-	.footer {
-		min-height: 28px;
+	.brand-copy { min-width: 0; }
+	.brand-title {
+		color: #f2f6f8;
+		font-size: 12px;
+		font-weight: 850;
+		letter-spacing: .2em;
+		line-height: 1.1;
+	}
+	.brand-subtitle {
+		margin-top: 4px;
+		color: #8395a5;
+		font-size: 8px;
+		font-weight: 750;
+		letter-spacing: .18em;
+		line-height: 1;
+	}
+	.topbar-note {
+		color: #637584;
+		font-size: 9px;
+		font-weight: 750;
+		letter-spacing: .16em;
+		white-space: nowrap;
+	}
+	.player-content {
 		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 0 22px;
-		border-top: 1px solid #18222d;
+		flex: 1 1 auto;
+		min-width: 0;
+		min-height: 0;
+		padding: 12px clamp(12px, 1.8vw, 24px) 14px;
 	}
 	@media (max-width: 600px) {
-		.topbar { padding: 0 12px; min-height: 60px; }
-		.connection-status { gap: 10px; }
-		.status-item { min-width: 70px; }
+		.topbar { flex-basis: 56px; padding: 0 14px; }
+		.brand-mark { width: 32px; height: 32px; flex-basis: 32px; border-radius: 9px; }
+		.topbar-note { font-size: 8px; letter-spacing: .1em; }
 		.player-content { padding: 8px; }
-		.footer { padding: 0 10px; font-size: 8px; letter-spacing: .08em; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		:scope *, :scope *::before, :scope *::after {
+			scroll-behavior: auto !important;
+			animation-duration: .01ms !important;
+			animation-iteration-count: 1 !important;
+			transition-duration: .01ms !important;
+		}
 	}
 `;
 

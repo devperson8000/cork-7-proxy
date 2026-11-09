@@ -1,26 +1,5 @@
 importScripts("/c7/controller/controller.sw.js");
 
-function reportScramjetError(clientId, requestUrl, message) {
-	const detail = {
-		c7Diagnostic: {
-			error: message,
-			request: requestUrl,
-			time: new Date().toISOString(),
-		},
-	};
-	const notification = self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-		for (const client of clients) {
-			client.postMessage(detail);
-		}
-	}).catch((error) => {
-		console.error("Could not publish Cork7 diagnostics:", error);
-	});
-	if (clientId) {
-		console.error("Cork7 Scramjet request failed:", requestUrl, message);
-	}
-	return notification;
-}
-
 addEventListener("fetch", (event) => {
 	if (!$scramjetController.shouldRoute(event)) return;
 
@@ -28,18 +7,16 @@ addEventListener("fetch", (event) => {
 		try {
 			const response = await $scramjetController.route(event);
 			if (response.status >= 500) {
-				let body = "Service worker returned HTTP " + response.status;
-				try {
-					body = await response.clone().text();
-				} catch {}
-				await reportScramjetError(event.clientId, event.request.url, body.slice(0, 1000));
+				console.warn(
+					"Cork7 upstream request returned HTTP " + response.status,
+					event.request.url,
+				);
 			}
 			return response;
 		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			await reportScramjetError(event.clientId, event.request.url, message);
-			return new Response("Internal Service Worker Error: " + message, {
-				status: 500,
+			console.error("Cork7 service-worker request failed:", event.request.url, error);
+			return new Response("Cork7 could not load this page. Refresh and try again.", {
+				status: 502,
 				headers: { "Content-Type": "text/plain; charset=utf-8" },
 			});
 		}

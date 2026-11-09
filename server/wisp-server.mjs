@@ -10,6 +10,30 @@ import { Duplex } from "node:stream";
 import { client as WispClient } from "@mercuryworkshop/wisp-js/client";
 import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 
+// Wisp JS 0.4.1 expects connection.streams to be iterable in its per-host
+// stream-limit check, but ServerConnection stores streams in a plain object.
+// Add a non-enumerable iterator before each stream is registered so that the
+// upstream limiter works as intended instead of crashing the process.
+const originalCreateWispStream = wisp.ServerConnection.prototype.create_stream;
+if (typeof originalCreateWispStream !== "function") {
+  throw new Error("Unsupported Wisp server package: ServerConnection.create_stream is unavailable");
+}
+wisp.ServerConnection.prototype.create_stream = function (...args) {
+  if (
+    this.streams &&
+    typeof this.streams[Symbol.iterator] !== "function"
+  ) {
+    Object.defineProperty(this.streams, Symbol.iterator, {
+      configurable: true,
+      enumerable: false,
+      value: function* streamValues() {
+        yield* Object.values(this);
+      }
+    });
+  }
+  return originalCreateWispStream.apply(this, args);
+};
+
 const HOST = "0.0.0.0";
 const WISP_PATH = "/wisp/";
 const PLAYER_PATH = "/c7";

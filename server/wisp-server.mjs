@@ -382,18 +382,18 @@ function probeWispTls(timeoutMs = 12000) {
         if (settled) return;
         stage = "http-request";
         secureSocket.write(
-          "GET / HTTP/1.1\\r\\n" +
-          "Host: " + CORK7_TLS_HOST + "\\r\\n" +
-          "Connection: close\\r\\n" +
-          "User-Agent: Cork7-Wisp-Health-Probe\\r\\n" +
-          "Accept: */*\\r\\n\\r\\n"
+          "GET / HTTP/1.1\r\n" +
+          "Host: " + CORK7_TLS_HOST + "\r\n" +
+          "Connection: close\r\n" +
+          "User-Agent: Cork7-Wisp-Health-Probe\r\n" +
+          "Accept: */*\r\n\r\n"
         );
       });
 
       secureSocket.on("data", (chunk) => {
         responseText += chunk.toString("latin1");
         if (responseText.length > 8192) responseText = responseText.slice(0, 8192);
-        const statusMatch = responseText.match(/^HTTP\\/\\d(?:\\.\\d)?\\s+(\\d{3})/);
+        const statusMatch = responseText.match(/^HTTP\/\d(?:\.\d)?\s+(\d{3})/);
         if (statusMatch) {
           finish({
             ok: true,
@@ -401,7 +401,7 @@ function probeWispTls(timeoutMs = 12000) {
             protocol: secureSocket.getProtocol(),
             authorized: secureSocket.authorized === true,
             httpStatus: Number(statusMatch[1]),
-            responseHeadersReceived: responseText.includes("\\r\\n\\r\\n")
+            responseHeadersReceived: responseText.includes("\r\n\r\n")
           });
         }
       });

@@ -414,6 +414,7 @@ const server = http.createServer(async (request, response) => {
 			player: "/c7/",
 			playerReady: ready,
 			playerDiagnostics,
+			allowedHosts,
 			websocketPath: WISP_PATH,
 		}));
 		return;

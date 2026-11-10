@@ -163,6 +163,19 @@ export function shouldRoute(event: FetchEvent): boolean {
 	return tab !== undefined;
 }
 
+function describeInternalRequestError(error: unknown): string {
+	const name = error instanceof Error && error.name ? error.name : "Error";
+	const rawMessage = error instanceof Error ? error.message : String(error);
+	const safeMessage = rawMessage
+		.replace(/https?:\/\/[^\s"'<>]+/gi, "[url]")
+		.replace(/\b[A-Za-z0-9_-]{32,}\b/g, "[redacted]")
+		.replace(/[\r\n\t]+/g, " ")
+		.replace(/\s+/g, " ")
+		.trim()
+		.slice(0, 180);
+	return (name + ": " + (safeMessage || "no message")).slice(0, 240);
+}
+
 export async function route(event: FetchEvent): Promise<Response> {
 	try {
 		const url = new URL(event.request.url);
@@ -200,11 +213,16 @@ export async function route(event: FetchEvent): Promise<Response> {
 			headers: response.headers,
 		});
 	} catch (e) {
-		console.error("Service Worker error:", e);
+		const diagnostic = describeInternalRequestError(e);
+		console.error("Service Worker error:", diagnostic);
 		return new Response(
-			"Internal Service Worker Error: " + (e as Error).message,
+			"Internal Service Worker Error: " + (e instanceof Error ? e.message : "Unknown error"),
 			{
 				status: 500,
+				headers: {
+					"X-C7-Internal-Error": diagnostic,
+					"Cache-Control": "no-store",
+				},
 			}
 		);
 	}

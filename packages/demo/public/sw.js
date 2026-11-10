@@ -44,14 +44,35 @@ addEventListener("fetch", (event) => {
 
 		try {
 			const response = await $scramjetController.route(event);
+			const internalError = response.headers.get("X-C7-Internal-Error");
 			if (trackRequest) {
-				await publishNetworkDiagnostic(event.request, response.status, null);
+				await publishNetworkDiagnostic(
+					event.request,
+					response.status,
+					internalError ? "SW_INTERNAL: " + internalError : null,
+				);
 			}
-			if (response.status >= 500) {
+			if (internalError) {
+				console.warn(
+					"Scramjet internal request error:",
+					getProxiedTargetHost(event.request),
+					internalError,
+				);
+			} else if (response.status >= 500) {
 				console.warn(
 					"Cork7 upstream request returned HTTP " + response.status,
 					getProxiedTargetHost(event.request),
 				);
+			}
+			if (internalError) {
+				// Keep internal diagnostics out of the response visible to the game.
+				const headers = new Headers(response.headers);
+				headers.delete("X-C7-Internal-Error");
+				return new Response(response.body, {
+					status: response.status,
+					statusText: response.statusText,
+					headers,
+				});
 			}
 			return response;
 		} catch (error) {

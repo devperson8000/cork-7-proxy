@@ -211,7 +211,9 @@ const BrowserView: Component<
 				? networkEntries.map((entry) => {
 					const time = new Date(entry.time).toLocaleTimeString();
 					const result = entry.errorType
-						? `NETWORK ERROR (${entry.errorType})`
+						? entry.errorType.startsWith("SW_INTERNAL: ")
+							? `INTERNAL SERVICE WORKER ERROR (${entry.errorType.slice("SW_INTERNAL: ".length)})`
+							: `NETWORK ERROR (${entry.errorType})`
 						: `HTTP ${entry.status}`;
 					return `[${time}] [${entry.source}] ${entry.method} https://${entry.host} — ${result}`;
 				}).join("\n")

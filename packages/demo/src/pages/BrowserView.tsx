@@ -42,6 +42,14 @@ function getSafeInitialUrl(): string {
 	return DEFAULT_CORK7_HOME;
 }
 
+type NetworkDiagnosticEntry = {
+	time: string;
+	host: string;
+	method: string;
+	status: number;
+	errorType: string | null;
+};
+
 type WebkitFullscreenDocument = Document & {
 	webkitFullscreenElement?: Element | null;
 	webkitExitFullscreen?: () => Promise<void> | void;
@@ -64,6 +72,61 @@ const BrowserView: Component<
 		const loadingDetail = gameRoot?.querySelector<HTMLElement>(".loading-detail");
 		const fullscreenButton = gameRoot?.querySelector<HTMLButtonElement>(".fullscreen-toggle");
 		const fullscreenDocument = document as WebkitFullscreenDocument;
+
+		const diagnosticsPanel = gameRoot?.querySelector<HTMLDetailsElement>(".network-diagnostics-panel");
+		const diagnosticsOutput = gameRoot?.querySelector<HTMLElement>(".network-diagnostics-output");
+		const diagnosticsCopy = gameRoot?.querySelector<HTMLButtonElement>(".network-diagnostics-copy");
+		const networkEntries: NetworkDiagnosticEntry[] = [];
+
+		const renderNetworkDiagnostics = () => {
+			if (!diagnosticsOutput) return;
+			diagnosticsOutput.textContent = networkEntries.length
+				? networkEntries.map((entry) => {
+					const time = new Date(entry.time).toLocaleTimeString();
+					const result = entry.errorType
+						? `NETWORK ERROR (${entry.errorType})`
+						: `HTTP ${entry.status}`;
+					return `[${time}] ${entry.method} https://${entry.host} — ${result}`;
+				}).join("\\n")
+				: "No Fetch/XHR requests captured yet. Open the account form and try again.";
+		};
+
+		const onNetworkDiagnostic = (event: MessageEvent) => {
+			const message = event.data;
+			if (message?.type !== "C7_API_NETWORK_DIAGNOSTIC") return;
+			const entry = message.entry as Partial<NetworkDiagnosticEntry> | undefined;
+			if (
+				!entry ||
+				typeof entry.time !== "string" ||
+				typeof entry.host !== "string" ||
+				typeof entry.method !== "string" ||
+				typeof entry.status !== "number"
+			) return;
+
+			networkEntries.push({
+				time: entry.time,
+				host: entry.host,
+				method: entry.method,
+				status: entry.status,
+				errorType: typeof entry.errorType === "string" ? entry.errorType : null,
+			});
+			if (networkEntries.length > 30) networkEntries.shift();
+			if (entry.status >= 400 || entry.errorType) {
+				if (diagnosticsPanel) diagnosticsPanel.open = true;
+			}
+			renderNetworkDiagnostics();
+		};
+
+		navigator.serviceWorker?.addEventListener("message", onNetworkDiagnostic);
+		diagnosticsCopy?.addEventListener("click", async () => {
+			try {
+				await navigator.clipboard.writeText(diagnosticsOutput?.textContent ?? "");
+				diagnosticsCopy.textContent = "Copied";
+			} catch {
+				diagnosticsCopy.textContent = "Copy unavailable";
+			}
+		});
+		renderNetworkDiagnostics();
 
 		const updateFullscreenButton = () => {
 			const active =
@@ -164,6 +227,17 @@ const BrowserView: Component<
 				allowfullscreen
 				referrerpolicy="no-referrer"
 			></iframe>
+			<details class="network-diagnostics-panel">
+				<summary>
+					<span>Network diagnostics</span>
+					<span class="network-diagnostics-hint">Fetch / XHR</span>
+				</summary>
+				<div class="network-diagnostics-body">
+					<p>Shows request hostnames and HTTP status only. Login details, cookies, headers and request contents are not collected.</p>
+					<pre class="network-diagnostics-output">No Fetch/XHR requests captured yet. Open the account form and try again.</pre>
+					<button class="network-diagnostics-copy" type="button">Copy report</button>
+				</div>
+			</details>
 			<button class="fullscreen-toggle" type="button" aria-label="Enter fullscreen" title="Enter fullscreen">
 				<svg class="fullscreen-enter-icon" viewBox="0 0 20 20" aria-hidden="true">
 					<path d="M7 3H3v4M13 3h4v4M3 13v4h4M17 13v4h-4" />
@@ -273,6 +347,74 @@ BrowserView.style = css`
 		color: #788d9b;
 		font-size: 11px;
 		letter-spacing: .02em;
+	}
+	.network-diagnostics-panel {
+		position: absolute;
+		z-index: 6;
+		left: 14px;
+		bottom: 14px;
+		width: min(560px, calc(100% - 28px));
+		max-height: min(42vh, 300px);
+		overflow: hidden;
+		border: 1px solid rgba(145, 174, 187, .26);
+		border-radius: 10px;
+		background: rgba(5, 10, 16, .94);
+		color: #dce9eb;
+		box-shadow: 0 10px 32px rgba(0, 0, 0, .34);
+		backdrop-filter: blur(14px);
+		-webkit-backdrop-filter: blur(14px);
+		font-size: 11px;
+	}
+	.network-diagnostics-panel summary {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 10px 12px;
+		color: #cde5e3;
+		font-weight: 800;
+		letter-spacing: .08em;
+		text-transform: uppercase;
+		cursor: pointer;
+		user-select: none;
+	}
+	.network-diagnostics-hint {
+		color: #7895a2;
+		font-size: 9px;
+		letter-spacing: .08em;
+	}
+	.network-diagnostics-body {
+		padding: 0 10px 10px;
+	}
+	.network-diagnostics-body p {
+		margin: 0 0 8px;
+		color: #8499a5;
+		font-size: 10px;
+		line-height: 1.45;
+	}
+	.network-diagnostics-output {
+		max-height: 190px;
+		margin: 0;
+		overflow: auto;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		color: #b4c8d0;
+		font: 10px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	}
+	.network-diagnostics-copy {
+		margin-top: 9px;
+		padding: 6px 9px;
+		border: 1px solid rgba(145, 174, 187, .24);
+		border-radius: 7px;
+		background: rgba(43, 64, 74, .4);
+		color: #dce9eb;
+		font: inherit;
+		font-size: 10px;
+		cursor: pointer;
+	}
+	.network-diagnostics-copy:hover { background: rgba(70, 105, 112, .48); }
+	@media (max-width: 600px) {
+		.network-diagnostics-panel { left: 8px; bottom: 8px; width: calc(100% - 16px); }
 	}
 	.fullscreen-toggle {
 		position: absolute;

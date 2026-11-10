@@ -48,6 +48,133 @@ type NetworkDiagnosticEntry = {
 	method: string;
 	status: number;
 	errorType: string | null;
+	source: string;
+};
+
+function getFrameRequestHost(frameWindow: Window, rawUrl: string): string {
+	try {
+		const url = new frameWindow.URL(rawUrl, frameWindow.location.href);
+		if (url.origin !== frameWindow.location.origin) {
+			return url.hostname;
+		}
+
+		// Scramjet URLs encode the original HTTPS destination in the path.
+		const decodedPath = decodeURIComponent(url.pathname);
+		const targetStart = decodedPath.indexOf("https://");
+		if (targetStart >= 0) {
+			return new frameWindow.URL(decodedPath.slice(targetStart)).hostname;
+		}
+		return "same-origin";
+	} catch {
+		return "unresolved";
+	}
+}
+
+function installFrameNetworkDiagnostics(frameWindow: Window) {
+	const diagnosticWindow = frameWindow as Window & {
+		__c7NetworkDiagnosticsInstalled?: boolean;
+	};
+	if (diagnosticWindow.__c7NetworkDiagnosticsInstalled) return;
+	diagnosticWindow.__c7NetworkDiagnosticsInstalled = true;
+
+	const publish = (
+		host: string,
+		method: string,
+		status: number,
+		errorType: string | null,
+		source: "Fetch" | "XHR",
+	) => {
+		try {
+			frameWindow.parent.postMessage(
+				{
+					type: "C7_FRAME_NETWORK_DIAGNOSTIC",
+					entry: {
+						time: new Date().toISOString(),
+						host,
+						method,
+						status,
+						errorType,
+						source,
+					},
+				},
+				frameWindow.location.origin,
+			);
+		} catch {
+			// Diagnostics must never interfere with the game's network request.
+		}
+	};
+
+	// Capture fetch() without reading request/response bodies or headers.
+	const nativeFetch = frameWindow.fetch.bind(frameWindow);
+	frameWindow.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+		const rawUrl =
+			typeof input === "string"
+				? input
+				: input instanceof frameWindow.URL
+					? input.href
+					: (input as Request).url;
+		const method =
+			init?.method ??
+			(typeof input === "object" && input !== null && "method" in input
+				? String((input as Request).method)
+				: "GET");
+		const host = getFrameRequestHost(frameWindow, rawUrl);
+
+		try {
+			const response = await nativeFetch(input, init);
+			publish(host, method.toUpperCase(), response.status, null, "Fetch");
+			return response;
+		} catch (error) {
+			publish(
+				host,
+				method.toUpperCase(),
+				0,
+				error instanceof Error ? error.name : "NetworkError",
+				"Fetch",
+			);
+			throw error;
+		}
+	}) as typeof frameWindow.fetch;
+
+	// Capture XMLHttpRequest completion while preserving the original methods.
+	const xhrPrototype = frameWindow.XMLHttpRequest.prototype;
+	const nativeOpen = xhrPrototype.open;
+	const nativeSend = xhrPrototype.send;
+	const xhrMetadata = new WeakMap<XMLHttpRequest, { host: string; method: string }>();
+
+	xhrPrototype.open = function (
+		this: XMLHttpRequest,
+		method: string,
+		url: string | URL,
+		async?: boolean,
+		username?: string | null,
+		password?: string | null,
+	) {
+		xhrMetadata.set(this, {
+			host: getFrameRequestHost(frameWindow, String(url)),
+			method: method.toUpperCase(),
+		});
+		return Reflect.apply(nativeOpen, this, [method, url, async, username, password]);
+	} as typeof xhrPrototype.open;
+
+	xhrPrototype.send = function (
+		this: XMLHttpRequest,
+		body?: Document | XMLHttpRequestBodyInit | null,
+	) {
+		const metadata = xhrMetadata.get(this);
+		if (metadata) {
+			this.addEventListener("loadend", () => {
+				publish(
+					metadata.host,
+					metadata.method,
+					this.status,
+					this.status === 0 ? "NetworkError" : null,
+					"XHR",
+				);
+			}, { once: true });
+		}
+		return Reflect.apply(nativeSend, this, [body]);
+	} as typeof xhrPrototype.send;
 };
 
 type WebkitFullscreenDocument = Document & {
@@ -86,9 +213,9 @@ const BrowserView: Component<
 					const result = entry.errorType
 						? `NETWORK ERROR (${entry.errorType})`
 						: `HTTP ${entry.status}`;
-					return `[${time}] ${entry.method} https://${entry.host} — ${result}`;
-				}).join("\\n")
-				: "No Fetch/XHR requests captured yet. Open the account form and try again.";
+					return `[${time}] [${entry.source}] ${entry.method} https://${entry.host} — ${result}`;
+				}).join("\n")
+				: "No API requests captured yet. Open the account form and try again.";
 		};
 
 		const onNetworkDiagnostic = (event: MessageEvent) => {
@@ -109,6 +236,7 @@ const BrowserView: Component<
 				method: entry.method,
 				status: entry.status,
 				errorType: typeof entry.errorType === "string" ? entry.errorType : null,
+				source: "Service worker",
 			});
 			if (networkEntries.length > 30) networkEntries.shift();
 			if (entry.status >= 400 || entry.errorType) {
@@ -118,6 +246,34 @@ const BrowserView: Component<
 		};
 
 		navigator.serviceWorker?.addEventListener("message", onNetworkDiagnostic);
+		const onFrameNetworkDiagnostic = (event: MessageEvent) => {
+			if (event.source !== this.frameel.contentWindow || event.origin !== window.location.origin) return;
+			const message = event.data;
+			if (message?.type !== "C7_FRAME_NETWORK_DIAGNOSTIC") return;
+			const entry = message.entry as Partial<NetworkDiagnosticEntry> | undefined;
+			if (
+				!entry ||
+				typeof entry.time !== "string" ||
+				typeof entry.host !== "string" ||
+				typeof entry.method !== "string" ||
+				typeof entry.status !== "number"
+			) return;
+
+			networkEntries.push({
+				time: entry.time,
+				host: entry.host,
+				method: entry.method,
+				status: entry.status,
+				errorType: typeof entry.errorType === "string" ? entry.errorType : null,
+				source: entry.source === "XHR" || entry.source === "Fetch" ? entry.source : "Frame",
+			});
+			if (networkEntries.length > 50) networkEntries.shift();
+			if (entry.status >= 400 || entry.errorType) {
+				if (diagnosticsPanel) diagnosticsPanel.open = true;
+			}
+			renderNetworkDiagnostics();
+		};
+		window.addEventListener("message", onFrameNetworkDiagnostic);
 		diagnosticsCopy?.addEventListener("click", async () => {
 			try {
 				await navigator.clipboard.writeText(diagnosticsOutput?.textContent ?? "");
@@ -189,6 +345,12 @@ const BrowserView: Component<
 			const navigate = () => {
 				this.frameel.addEventListener("load", () => {
 					gameRoot?.classList.add("is-loaded");
+					try {
+						const frameWindow = this.frameel.contentWindow;
+						if (frameWindow) installFrameNetworkDiagnostics(frameWindow);
+					} catch (error) {
+						console.warn("Cork7 frame network diagnostics could not be installed:", error);
+					}
 				}, { once: true });
 
 				try {
@@ -233,7 +395,7 @@ const BrowserView: Component<
 					<span class="network-diagnostics-hint">Fetch / XHR</span>
 				</summary>
 				<div class="network-diagnostics-body">
-					<p>Shows request hostnames and HTTP status only. Login details, cookies, headers and request contents are not collected.</p>
+					<p>Captures Fetch/XHR hostname, method and status only. It never reads login fields, cookies, headers or request/response bodies.</p>
 					<pre class="network-diagnostics-output">No Fetch/XHR requests captured yet. Open the account form and try again.</pre>
 					<button class="network-diagnostics-copy" type="button">Copy report</button>
 				</div>

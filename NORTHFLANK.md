@@ -1,6 +1,6 @@
 # Deploy the Cork7 player and Wisp backend on Northflank
 
-This service provides both the fixed Cork7 player at `/c7/` and the Wisp WebSocket endpoint at `/wisp/`. The player has no general-purpose address bar. Its initial destination is the official Cork7 game, and the backend allows only exact Cork7 hostnames.
+This service provides both the fixed Cork7 player at `/c7/` and the Wisp WebSocket endpoint at `/wisp/`. The player has no general-purpose address bar. Its initial destination is the official Cork7 game, and the backend allows only exact Cork7 and account API hostnames.
 
 ## 1. Northflank service
 
@@ -18,11 +18,11 @@ The first build can take longer because it compiles the Rust WebAssembly rewrite
 | Variable | Value |
 | --- | --- |
 | `PORT` | `3000` |
-| `CORK7_ALLOWED_HOSTS` | `cork7.com,www.cork7.com,live.cork7.com` |
+| `CORK7_ALLOWED_HOSTS` | `cork7.com,www.cork7.com,live.cork7.com,agfhgulgtsocvioqqxvi.supabase.co` |
 | `ALLOWED_ORIGINS` | `https://cork7game.vercel.app` |
 | `MAX_WS_CONNECTIONS` | `60` |
 
-The official Cork7 updates identify `live.cork7.com` as the game's live multiplayer service. It is included as an exact hostname, not as a wildcard.
+The official game hosts remain exact entries. The observed account/API host `agfhgulgtsocvioqqxvi.supabase.co` is also included as one exact hostname so the game can reach its Supabase-backed account service. This does not allow every `supabase.co` project or use a wildcard.
 
 ## 3. Networking
 
@@ -61,6 +61,7 @@ The existing Vercel `VITE_WISP_URL` environment variable remains available, but 
 - Any optional `goto` value is accepted only for `https://cork7.com`, `https://www.cork7.com`, or `https://live.cork7.com`.
 - Scramjet's service worker is scoped to `/c7/`; its internal virtual URL prefix and script paths are also under `/c7/`.
 - Wisp permits only the exact destination hosts listed in `CORK7_ALLOWED_HOSTS` and ports 80/443.
+- The Supabase account/API destination is restricted to the exact host `agfhgulgtsocvioqqxvi.supabase.co`; other Supabase projects remain blocked.
 - Direct-IP, private-network, loopback and UDP destinations are disabled.
 - The health panel checks the backend and opens a short WebSocket connection so the user can see status without developer tools.
 

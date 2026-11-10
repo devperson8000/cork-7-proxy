@@ -14,7 +14,7 @@ const APP_ROOT = path.resolve(SERVER_DIR, "..");
 const STATIC_ROOT = path.join(APP_ROOT, "packages", "demo", "dist");
 const PLAYER_INDEX = path.join(STATIC_ROOT, "index.html");
 
-const DEFAULT_ALLOWED_HOSTS = "cork7.com,www.cork7.com,live.cork7.com";
+const DEFAULT_ALLOWED_HOSTS = "cork7.com,www.cork7.com,live.cork7.com,agfhgulgtsocvioqqxvi.supabase.co";
 const DEFAULT_ALLOWED_ORIGINS = "https://cork7game.vercel.app";
 
 const MIME_TYPES = {

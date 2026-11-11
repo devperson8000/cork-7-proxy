@@ -1,5 +1,5 @@
 import App from "./App";
-import EpoxyClient from "@mercuryworkshop/epoxy-transport";
+import LibcurlClient from "@mercuryworkshop/libcurl-transport";
 import { defaultConfig } from "@mercuryworkshop/scramjet";
 import { Controller } from "@mercuryworkshop/scramjet-controller";
 import { demoSettingsStore } from "./store";
@@ -84,7 +84,7 @@ async function init(): Promise<InstanceType<typeof Controller>> {
 
 	controller = new Controller({
 		serviceworker: serviceWorker,
-		transport: new EpoxyClient({ wisp: demoSettingsStore.wispUrl }),
+		transport: new LibcurlClient({ wisp: demoSettingsStore.wispUrl }),
 		config: {
 			prefix: "/c7/~/sj/",
 			scramjetPath: "/c7/scramjet/scramjet.js",

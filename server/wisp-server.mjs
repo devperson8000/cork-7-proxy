@@ -393,9 +393,17 @@ async function servePlayerAsset(pathname, request, response) {
 	}
 }
 
-const allowedHosts = parseAllowedHosts(
-	process.env.CORK7_ALLOWED_HOSTS ?? DEFAULT_ALLOWED_HOSTS,
-);
+// Keep the one observed Cork7 account/API host available even when
+// Northflank has an older CORK7_ALLOWED_HOSTS value configured. This is
+// still an exact-host allowlist; no wildcard Supabase access is granted.
+const allowedHosts = [
+	...new Set([
+		...parseAllowedHosts(
+			process.env.CORK7_ALLOWED_HOSTS ?? DEFAULT_ALLOWED_HOSTS,
+		),
+		SUPABASE_API_HOST,
+	]),
+];
 const allowedOrigins = parseAllowedOrigins(
 	process.env.ALLOWED_ORIGINS ?? DEFAULT_ALLOWED_ORIGINS,
 );

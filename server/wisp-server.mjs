@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
+import tls from "node:tls";
 import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 
 const HOST = "0.0.0.0";
@@ -16,6 +17,7 @@ const PLAYER_INDEX = path.join(STATIC_ROOT, "index.html");
 
 const DEFAULT_ALLOWED_HOSTS = "cork7.com,www.cork7.com,live.cork7.com,agfhgulgtsocvioqqxvi.supabase.co";
 const DEFAULT_ALLOWED_ORIGINS = "https://cork7game.vercel.app";
+const SUPABASE_API_HOST = "agfhgulgtsocvioqqxvi.supabase.co";
 
 const MIME_TYPES = {
 	".html": "text/html; charset=utf-8",
@@ -148,6 +150,66 @@ function readPositiveInteger(value, variableName, fallback, max = 500) {
 		throw new Error(variableName + " must be an integer between 1 and " + max + ".");
 	}
 	return parsed;
+}
+
+function probeSupabaseTls() {
+	return new Promise((resolve) => {
+		let settled = false;
+		let timeoutId;
+		let socket;
+
+		const finish = (result) => {
+			if (settled) return;
+			settled = true;
+			if (timeoutId !== undefined) clearTimeout(timeoutId);
+			if (socket && !socket.destroyed) socket.destroy();
+			resolve(result);
+		};
+
+		try {
+			socket = tls.connect({
+				host: SUPABASE_API_HOST,
+				port: 443,
+				servername: SUPABASE_API_HOST,
+				minVersion: "TLSv1.2",
+				ALPNProtocols: ["h2", "http/1.1"],
+				rejectUnauthorized: true,
+			});
+
+			socket.once("secureConnect", () => {
+				const cipher = socket.getCipher();
+				finish({
+					ok: true,
+					host: SUPABASE_API_HOST,
+					tlsVersion: socket.getProtocol(),
+					cipher: cipher?.standardName ?? cipher?.name ?? null,
+					alpn: socket.alpnProtocol || null,
+				});
+			});
+
+			socket.once("error", (error) => {
+				finish({
+					ok: false,
+					host: SUPABASE_API_HOST,
+					errorCode: typeof error?.code === "string" ? error.code : "TLS_ERROR",
+				});
+			});
+
+			timeoutId = setTimeout(() => {
+				finish({
+					ok: false,
+					host: SUPABASE_API_HOST,
+					errorCode: "TIMEOUT",
+				});
+			}, 8000);
+		} catch (error) {
+			finish({
+				ok: false,
+				host: SUPABASE_API_HOST,
+				errorCode: typeof error?.code === "string" ? error.code : "TLS_SETUP_ERROR",
+			});
+		}
+	});
 }
 
 function rejectUpgrade(socket, status, reason) {
@@ -397,6 +459,36 @@ const server = http.createServer(async (request, response) => {
 	} catch {
 		response.writeHead(400, { "Cache-Control": "no-store" });
 		response.end("Bad request");
+		return;
+	}
+
+	if (request.method === "GET" && pathname === "/diagnostics/supabase-tls") {
+		setHealthCors(request, response, allowedOrigins);
+		const allowlisted = allowedHosts.includes(SUPABASE_API_HOST);
+		if (!allowlisted) {
+			response.writeHead(409, {
+				"Content-Type": "application/json; charset=utf-8",
+				"Cache-Control": "no-store",
+			});
+			response.end(JSON.stringify({
+				ok: false,
+				host: SUPABASE_API_HOST,
+				allowlisted,
+				errorCode: "HOST_NOT_IN_ACTIVE_ALLOWLIST",
+			}));
+			return;
+		}
+
+		const probe = await probeSupabaseTls();
+		response.writeHead(probe.ok ? 200 : 502, {
+			"Content-Type": "application/json; charset=utf-8",
+			"Cache-Control": "no-store",
+		});
+		response.end(JSON.stringify({
+			...probe,
+			allowlisted,
+			probe: "Node TLS handshake only; no account request or credentials sent",
+		}));
 		return;
 	}
 

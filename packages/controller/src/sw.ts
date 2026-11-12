@@ -163,19 +163,6 @@ export function shouldRoute(event: FetchEvent): boolean {
 	return tab !== undefined;
 }
 
-function describeInternalRequestError(error: unknown): string {
-	const name = error instanceof Error && error.name ? error.name : "Error";
-	const rawMessage = error instanceof Error ? error.message : String(error);
-	const safeMessage = rawMessage
-		.replace(/https?:\/\/[^\s"'<>]+/gi, "[url]")
-		.replace(/\b[A-Za-z0-9_-]{32,}\b/g, "[redacted]")
-		.replace(/[\r\n\t]+/g, " ")
-		.replace(/\s+/g, " ")
-		.trim()
-		.slice(0, 180);
-	return (name + ": " + (safeMessage || "no message")).slice(0, 240);
-}
-
 export async function route(event: FetchEvent): Promise<Response> {
 	try {
 		const url = new URL(event.request.url);
@@ -212,19 +199,11 @@ export async function route(event: FetchEvent): Promise<Response> {
 			statusText: response.statusText,
 			headers: response.headers,
 		});
-	} catch (e) {
-		const diagnostic = describeInternalRequestError(e);
-		console.error("Service Worker error:", diagnostic);
-		return new Response(
-			"Internal Service Worker Error: " + (e instanceof Error ? e.message : "Unknown error"),
-			{
-				status: 500,
-				headers: {
-					"X-C7-Internal-Error": diagnostic,
-					"Cache-Control": "no-store",
-				},
-			}
-		);
+	} catch {
+		return new Response("Cork7 could not process this request. Refresh and try again.", {
+			status: 500,
+			headers: { "Cache-Control": "no-store" },
+		});
 	}
 }
 

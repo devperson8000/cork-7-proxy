@@ -1,5 +1,4 @@
 import App from "./App";
-import LibcurlClient from "@mercuryworkshop/libcurl-transport";
 import EpoxyTransport from "@mercuryworkshop/epoxy-transport";
 import { defaultConfig } from "@mercuryworkshop/scramjet";
 import { Controller } from "@mercuryworkshop/scramjet-controller";
@@ -11,19 +10,6 @@ if (!app) {
 }
 
 let controller: InstanceType<typeof Controller>;
-
-// Epoxy is the default TLS transport. Keep Libcurl available as an explicit
-// diagnostic fallback via ?transport=libcurl so the two TLS implementations
-// can be compared against the same Wisp backend.
-const transportOverride = new URLSearchParams(window.location.search).get("transport");
-const selectedTransport = transportOverride === "libcurl" ? "libcurl" : "epoxy";
-
-function createProxyTransport() {
-	if (selectedTransport === "libcurl") {
-		return new LibcurlClient({ wisp: demoSettingsStore.wispUrl });
-	}
-	return new EpoxyTransport({ wisp: demoSettingsStore.wispUrl });
-}
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
@@ -79,7 +65,6 @@ async function waitForActiveWorker(
 }
 
 async function init(): Promise<InstanceType<typeof Controller>> {
-	console.info("Cork7 network transport:", selectedTransport);
 	if (!("serviceWorker" in navigator)) {
 		throw new Error("This browser does not support service workers.");
 	}
@@ -99,7 +84,7 @@ async function init(): Promise<InstanceType<typeof Controller>> {
 
 	controller = new Controller({
 		serviceworker: serviceWorker,
-		transport: createProxyTransport(),
+		transport: new EpoxyTransport({ wisp: demoSettingsStore.wispUrl }),
 		config: {
 			prefix: "/c7/~/sj/",
 			scramjetPath: "/c7/scramjet/scramjet.js",

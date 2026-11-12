@@ -41,7 +41,7 @@ Northflank's HTTPS ingress provides TLS. The browser's Wisp connection uses `wss
 
 - `https://YOUR-NORTHFLANK-HOST/health` should return JSON with `"status":"ok"`.
 - `https://YOUR-NORTHFLANK-HOST/c7/` should return the Cork7 player HTML.
-- The player page shows its own backend and WebSocket status indicators; opening browser developer tools is not required.
+- The `/health` endpoint reports whether the server and built player assets are ready. It does not test an actual game session.
 
 ## 5. Vercel path routing
 
@@ -63,7 +63,7 @@ The existing Vercel `VITE_WISP_URL` environment variable remains available, but 
 - Wisp permits only the exact destination hosts listed in `CORK7_ALLOWED_HOSTS` and ports 80/443.
 - The Supabase account/API destination is restricted to the exact host `agfhgulgtsocvioqqxvi.supabase.co`; other Supabase projects remain blocked.
 - Direct-IP, private-network, loopback and UDP destinations are disabled.
-- The health panel checks the backend and opens a short WebSocket connection so the user can see status without developer tools.
+- The player opens its Wisp WebSocket connection when the game starts. Confirm multiplayer by joining the same live room from two separate player sessions.
 
 A successful health check confirms the HTTP server is running. A successful WSS status confirms the browser can complete the WebSocket handshake. Neither alone guarantees every Cork7 asset or multiplayer feature is working; if game assets are blocked, verify the exact additional Cork7 hostname before adding it.
 

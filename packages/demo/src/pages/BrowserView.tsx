@@ -42,141 +42,6 @@ function getSafeInitialUrl(): string {
 	return DEFAULT_CORK7_HOME;
 }
 
-type NetworkDiagnosticEntry = {
-	time: string;
-	host: string;
-	method: string;
-	status: number;
-	errorType: string | null;
-	source: string;
-};
-
-function getFrameRequestHost(frameWindow: Window, rawUrl: string): string {
-	try {
-		const url = new frameWindow.URL(rawUrl, frameWindow.location.href);
-		if (url.origin !== frameWindow.location.origin) {
-			return url.hostname;
-		}
-
-		// Scramjet URLs encode the original HTTPS destination in the path.
-		const decodedPath = decodeURIComponent(url.pathname);
-		const targetStart = decodedPath.indexOf("https://");
-		if (targetStart >= 0) {
-			return new frameWindow.URL(decodedPath.slice(targetStart)).hostname;
-		}
-		return "same-origin";
-	} catch {
-		return "unresolved";
-	}
-}
-
-function installFrameNetworkDiagnostics(frameWindow: Window) {
-	const diagnosticWindow = frameWindow as Window & {
-		__c7NetworkDiagnosticsInstalled?: boolean;
-	};
-	if (diagnosticWindow.__c7NetworkDiagnosticsInstalled) return;
-	diagnosticWindow.__c7NetworkDiagnosticsInstalled = true;
-
-	const publish = (
-		host: string,
-		method: string,
-		status: number,
-		errorType: string | null,
-		source: "Fetch" | "XHR",
-	) => {
-		try {
-			frameWindow.parent.postMessage(
-				{
-					type: "C7_FRAME_NETWORK_DIAGNOSTIC",
-					entry: {
-						time: new Date().toISOString(),
-						host,
-						method,
-						status,
-						errorType,
-						source,
-					},
-				},
-				frameWindow.location.origin,
-			);
-		} catch {
-			// Diagnostics must never interfere with the game's network request.
-		}
-	};
-
-	// Capture fetch() without reading request/response bodies or headers.
-	const nativeFetch = frameWindow.fetch.bind(frameWindow);
-	frameWindow.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-		const rawUrl =
-			typeof input === "string"
-				? input
-				: input instanceof frameWindow.URL
-					? input.href
-					: (input as Request).url;
-		const method =
-			init?.method ??
-			(typeof input === "object" && input !== null && "method" in input
-				? String((input as Request).method)
-				: "GET");
-		const host = getFrameRequestHost(frameWindow, rawUrl);
-
-		try {
-			const response = await nativeFetch(input, init);
-			publish(host, method.toUpperCase(), response.status, null, "Fetch");
-			return response;
-		} catch (error) {
-			publish(
-				host,
-				method.toUpperCase(),
-				0,
-				error instanceof Error ? error.name : "NetworkError",
-				"Fetch",
-			);
-			throw error;
-		}
-	}) as typeof frameWindow.fetch;
-
-	// Capture XMLHttpRequest completion while preserving the original methods.
-	const xhrPrototype = frameWindow.XMLHttpRequest.prototype;
-	const nativeOpen = xhrPrototype.open;
-	const nativeSend = xhrPrototype.send;
-	const xhrMetadata = new WeakMap<XMLHttpRequest, { host: string; method: string }>();
-
-	xhrPrototype.open = function (
-		this: XMLHttpRequest,
-		method: string,
-		url: string | URL,
-		async?: boolean,
-		username?: string | null,
-		password?: string | null,
-	) {
-		xhrMetadata.set(this, {
-			host: getFrameRequestHost(frameWindow, String(url)),
-			method: method.toUpperCase(),
-		});
-		return Reflect.apply(nativeOpen, this, [method, url, async, username, password]);
-	} as typeof xhrPrototype.open;
-
-	xhrPrototype.send = function (
-		this: XMLHttpRequest,
-		body?: Document | XMLHttpRequestBodyInit | null,
-	) {
-		const metadata = xhrMetadata.get(this);
-		if (metadata) {
-			this.addEventListener("loadend", () => {
-				publish(
-					metadata.host,
-					metadata.method,
-					this.status,
-					this.status === 0 ? "NetworkError" : null,
-					"XHR",
-				);
-			}, { once: true });
-		}
-		return Reflect.apply(nativeSend, this, [body]);
-	} as typeof xhrPrototype.send;
-};
-
 type WebkitFullscreenDocument = Document & {
 	webkitFullscreenElement?: Element | null;
 	webkitExitFullscreen?: () => Promise<void> | void;
@@ -199,92 +64,6 @@ const BrowserView: Component<
 		const loadingDetail = gameRoot?.querySelector<HTMLElement>(".loading-detail");
 		const fullscreenButton = gameRoot?.querySelector<HTMLButtonElement>(".fullscreen-toggle");
 		const fullscreenDocument = document as WebkitFullscreenDocument;
-
-		const diagnosticsPanel = gameRoot?.querySelector<HTMLDetailsElement>(".network-diagnostics-panel");
-		const diagnosticsOutput = gameRoot?.querySelector<HTMLElement>(".network-diagnostics-output");
-		const diagnosticsCopy = gameRoot?.querySelector<HTMLButtonElement>(".network-diagnostics-copy");
-		const networkEntries: NetworkDiagnosticEntry[] = [];
-
-		const renderNetworkDiagnostics = () => {
-			if (!diagnosticsOutput) return;
-			diagnosticsOutput.textContent = networkEntries.length
-				? networkEntries.map((entry) => {
-					const time = new Date(entry.time).toLocaleTimeString();
-					const result = entry.errorType
-						? entry.errorType.startsWith("SW_INTERNAL: ")
-							? `INTERNAL SERVICE WORKER ERROR (${entry.errorType.slice("SW_INTERNAL: ".length)})`
-							: `NETWORK ERROR (${entry.errorType})`
-						: `HTTP ${entry.status}`;
-					return `[${time}] [${entry.source}] ${entry.method} https://${entry.host} — ${result}`;
-				}).join("\n")
-				: "No API requests captured yet. Open the account form and try again.";
-		};
-
-		const onNetworkDiagnostic = (event: MessageEvent) => {
-			const message = event.data;
-			if (message?.type !== "C7_API_NETWORK_DIAGNOSTIC") return;
-			const entry = message.entry as Partial<NetworkDiagnosticEntry> | undefined;
-			if (
-				!entry ||
-				typeof entry.time !== "string" ||
-				typeof entry.host !== "string" ||
-				typeof entry.method !== "string" ||
-				typeof entry.status !== "number"
-			) return;
-
-			networkEntries.push({
-				time: entry.time,
-				host: entry.host,
-				method: entry.method,
-				status: entry.status,
-				errorType: typeof entry.errorType === "string" ? entry.errorType : null,
-				source: "Service worker",
-			});
-			if (networkEntries.length > 30) networkEntries.shift();
-			if (entry.status >= 400 || entry.errorType) {
-				if (diagnosticsPanel) diagnosticsPanel.open = true;
-			}
-			renderNetworkDiagnostics();
-		};
-
-		navigator.serviceWorker?.addEventListener("message", onNetworkDiagnostic);
-		const onFrameNetworkDiagnostic = (event: MessageEvent) => {
-			if (event.source !== this.frameel.contentWindow || event.origin !== window.location.origin) return;
-			const message = event.data;
-			if (message?.type !== "C7_FRAME_NETWORK_DIAGNOSTIC") return;
-			const entry = message.entry as Partial<NetworkDiagnosticEntry> | undefined;
-			if (
-				!entry ||
-				typeof entry.time !== "string" ||
-				typeof entry.host !== "string" ||
-				typeof entry.method !== "string" ||
-				typeof entry.status !== "number"
-			) return;
-
-			networkEntries.push({
-				time: entry.time,
-				host: entry.host,
-				method: entry.method,
-				status: entry.status,
-				errorType: typeof entry.errorType === "string" ? entry.errorType : null,
-				source: entry.source === "XHR" || entry.source === "Fetch" ? entry.source : "Frame",
-			});
-			if (networkEntries.length > 50) networkEntries.shift();
-			if (entry.status >= 400 || entry.errorType) {
-				if (diagnosticsPanel) diagnosticsPanel.open = true;
-			}
-			renderNetworkDiagnostics();
-		};
-		window.addEventListener("message", onFrameNetworkDiagnostic);
-		diagnosticsCopy?.addEventListener("click", async () => {
-			try {
-				await navigator.clipboard.writeText(diagnosticsOutput?.textContent ?? "");
-				diagnosticsCopy.textContent = "Copied";
-			} catch {
-				diagnosticsCopy.textContent = "Copy unavailable";
-			}
-		});
-		renderNetworkDiagnostics();
 
 		const updateFullscreenButton = () => {
 			const active =
@@ -347,12 +126,6 @@ const BrowserView: Component<
 			const navigate = () => {
 				this.frameel.addEventListener("load", () => {
 					gameRoot?.classList.add("is-loaded");
-					try {
-						const frameWindow = this.frameel.contentWindow;
-						if (frameWindow) installFrameNetworkDiagnostics(frameWindow);
-					} catch (error) {
-						console.warn("Cork7 frame network diagnostics could not be installed:", error);
-					}
 				}, { once: true });
 
 				try {
@@ -391,17 +164,6 @@ const BrowserView: Component<
 				allowfullscreen
 				referrerpolicy="no-referrer"
 			></iframe>
-			<details class="network-diagnostics-panel">
-				<summary>
-					<span>Network diagnostics</span>
-					<span class="network-diagnostics-hint">Fetch / XHR</span>
-				</summary>
-				<div class="network-diagnostics-body">
-					<p>Captures Fetch/XHR hostname, method and status only. It never reads login fields, cookies, headers or request/response bodies.</p>
-					<pre class="network-diagnostics-output">No Fetch/XHR requests captured yet. Open the account form and try again.</pre>
-					<button class="network-diagnostics-copy" type="button">Copy report</button>
-				</div>
-			</details>
 			<button class="fullscreen-toggle" type="button" aria-label="Enter fullscreen" title="Enter fullscreen">
 				<svg class="fullscreen-enter-icon" viewBox="0 0 20 20" aria-hidden="true">
 					<path d="M7 3H3v4M13 3h4v4M3 13v4h4M17 13v4h-4" />
@@ -424,16 +186,14 @@ BrowserView.style = css`
 	}
 	.game-frame {
 		position: relative;
-		isolation: isolate;
 		contain: layout paint;
 		flex: 1 1 auto;
 		min-width: 0;
 		min-height: 0;
 		overflow: hidden;
-		border: 1px solid rgba(123, 151, 172, .2);
-		border-radius: 13px;
-		background: #030609;
-		box-shadow: 0 16px 48px rgba(0, 0, 0, .24), inset 0 1px 0 rgba(255, 255, 255, .025);
+		border: 0;
+		border-radius: 0;
+		background: #000;
 	}
 	.game-frame:fullscreen,
 	.game-frame:-webkit-full-screen {
@@ -457,6 +217,9 @@ BrowserView.style = css`
 		height: 100%;
 		border: 0;
 		background: #000;
+		/* Keep the game surface independently composited from the player UI. */
+		transform: translate3d(0, 0, 0);
+		backface-visibility: hidden;
 	}
 	.game-loading {
 		position: absolute;
@@ -512,74 +275,6 @@ BrowserView.style = css`
 		font-size: 11px;
 		letter-spacing: .02em;
 	}
-	.network-diagnostics-panel {
-		position: absolute;
-		z-index: 6;
-		left: 14px;
-		bottom: 14px;
-		width: min(560px, calc(100% - 28px));
-		max-height: min(42vh, 300px);
-		overflow: hidden;
-		border: 1px solid rgba(145, 174, 187, .26);
-		border-radius: 10px;
-		background: rgba(5, 10, 16, .94);
-		color: #dce9eb;
-		box-shadow: 0 10px 32px rgba(0, 0, 0, .34);
-		backdrop-filter: blur(14px);
-		-webkit-backdrop-filter: blur(14px);
-		font-size: 11px;
-	}
-	.network-diagnostics-panel summary {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
-		padding: 10px 12px;
-		color: #cde5e3;
-		font-weight: 800;
-		letter-spacing: .08em;
-		text-transform: uppercase;
-		cursor: pointer;
-		user-select: none;
-	}
-	.network-diagnostics-hint {
-		color: #7895a2;
-		font-size: 9px;
-		letter-spacing: .08em;
-	}
-	.network-diagnostics-body {
-		padding: 0 10px 10px;
-	}
-	.network-diagnostics-body p {
-		margin: 0 0 8px;
-		color: #8499a5;
-		font-size: 10px;
-		line-height: 1.45;
-	}
-	.network-diagnostics-output {
-		max-height: 190px;
-		margin: 0;
-		overflow: auto;
-		white-space: pre-wrap;
-		overflow-wrap: anywhere;
-		color: #b4c8d0;
-		font: 10px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-	}
-	.network-diagnostics-copy {
-		margin-top: 9px;
-		padding: 6px 9px;
-		border: 1px solid rgba(145, 174, 187, .24);
-		border-radius: 7px;
-		background: rgba(43, 64, 74, .4);
-		color: #dce9eb;
-		font: inherit;
-		font-size: 10px;
-		cursor: pointer;
-	}
-	.network-diagnostics-copy:hover { background: rgba(70, 105, 112, .48); }
-	@media (max-width: 600px) {
-		.network-diagnostics-panel { left: 8px; bottom: 8px; width: calc(100% - 16px); }
-	}
 	.fullscreen-toggle {
 		position: absolute;
 		z-index: 5;
@@ -593,14 +288,12 @@ BrowserView.style = css`
 		padding: 0 12px;
 		border: 1px solid rgba(196, 220, 225, .2);
 		border-radius: 9px;
-		background: rgba(7, 13, 20, .78);
+		background: rgba(7, 13, 20, .96);
 		color: #e7f0f1;
 		font: inherit;
 		font-size: 10px;
 		font-weight: 750;
 		letter-spacing: .08em;
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
 		cursor: pointer;
 		transition: background .16s ease, border-color .16s ease, opacity .16s ease;
 	}
@@ -634,7 +327,6 @@ BrowserView.style = css`
 	}
 	@keyframes cork7-spin { to { transform: rotate(360deg); } }
 	@media (max-width: 600px) {
-		.game-frame { border-radius: 9px; }
 		.fullscreen-toggle { top: 9px; right: 9px; min-height: 34px; padding: 0 10px; }
 	}
 	@media (prefers-reduced-motion: reduce) {

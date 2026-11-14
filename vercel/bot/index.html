@@ -227,7 +227,7 @@
   function pushTrace(s){
     if(s.steps%2!==0)return;
     s.trace.push({
-      z:s.z,x:s.x,height:s.height,rotation:s.rotation,airborne:s.airborne,
+      z:s.z,x:s.x,vx:s.vx,height:s.height,rotation:s.rotation,airborne:s.airborne,
       rail:s.rail,score:s.score,combo:s.combo,lastTrick:s.lastTrick
     });
   }
@@ -326,7 +326,7 @@
     return s.score+s.z*0.115+s.landings*58+s.rails*78-s.missed*20-s.crashes*115;
   }
   function saveBest(s,score){
-    const frames=s.trace.length?s.trace:[{z:s.z,x:s.x,height:s.height,rotation:s.rotation,airborne:s.airborne,rail:s.rail,score:s.score,combo:s.combo,lastTrick:s.lastTrick}];
+    const frames=s.trace.length?s.trace:[{z:s.z,x:s.x,vx:s.vx,height:s.height,rotation:s.rotation,airborne:s.airborne,rail:s.rail,score:s.score,combo:s.combo,lastTrick:s.lastTrick}];
     bestReplay={score:Math.round(score),style:Math.round(s.score),generation:generation,rider:agentIndex+1,landings:s.landings,rails:s.rails,missed:s.missed,frames:frames};
     bestScoreValue=Math.round(score);
     $("watchBtn").disabled=false;$("replayBtn").disabled=false;
@@ -460,7 +460,7 @@
     const airborne=s.airborne||s.height>.1;
     ctx.save();
     ctx.globalAlpha=.36;ctx.fillStyle="#02080b";ctx.beginPath();ctx.ellipse(px, h*.82, 17,5,0,0,Math.PI*2);ctx.fill();ctx.restore();
-    ctx.save();ctx.translate(px,py);ctx.rotate(airborne?s.rotation*Math.PI/180*.13:clamp(s.vx*.12,-.22,.22));
+    ctx.save();ctx.translate(px,py);ctx.rotate(airborne?s.rotation*Math.PI/180*.13:clamp((s.vx||0)*.12,-.22,.22));
     ctx.strokeStyle="#9ee8d3";ctx.lineWidth=4;ctx.lineCap="round";
     ctx.beginPath();ctx.moveTo(-2,1);ctx.lineTo(-7,15);ctx.moveTo(2,1);ctx.lineTo(8,14);ctx.stroke();
     ctx.strokeStyle="#dceae2";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-7,-9);ctx.lineTo(-16,1);ctx.moveTo(4,-9);ctx.lineTo(15,-2);ctx.stroke();

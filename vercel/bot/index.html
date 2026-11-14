@@ -198,6 +198,7 @@ function renderCork7(data){
     ?"Container RAM: unavailable"
     :"Container RAM: "+resources.containerMemoryMb+" / "+(resources.containerMemoryLimitMb==null?"unknown":resources.containerMemoryLimitMb)+" MB";
   const processLine="Worker RSS: "+(resources.processRssMb==null?"—":resources.processRssMb+" MB")+
+    " · CPU quota: "+(resources.cpuLimitCores==null?"—":resources.cpuLimitCores+" vCPU")+
     " · OOM kills: "+(resources.oomKills==null?"—":resources.oomKills)+
     " · CPU throttled: "+(resources.cpuThrottledSeconds==null?"—":resources.cpuThrottledSeconds+" s");
   $("c7PageText").textContent=memoryLine+"\n"+processLine+"\n\n"+

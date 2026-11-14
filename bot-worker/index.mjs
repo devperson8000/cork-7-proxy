@@ -428,7 +428,28 @@ const server = http.createServer(async (req, res) => {
       }
       if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });
       const input = await readJsonBody(req, 8000);
-      if (action === "start") return json(res, 200, await cork7Agent.start({ park: input.park || "APEX" }));
+      if (action === "start") {
+        if (cork7Agent.page && !cork7Agent.page.isClosed()) {
+          return json(res, 200, await cork7Agent.status({ screenshot: true }));
+        }
+        if (!cork7Agent.starting) {
+          cork7Agent.starting = true;
+          void cork7Agent.start({ park: input.park || "APEX" })
+            .catch(error => { cork7Agent.lastError = String(error?.message || error).slice(0, 400); })
+            .finally(() => { cork7Agent.starting = false; });
+        }
+        return json(res, 202, {
+          connected: false,
+          site: "cork7.com",
+          mode: "Solo / unsigned browser session",
+          park: input.park || "APEX",
+          phase: "starting",
+          starting: true,
+          lastAction: "Launching the real Cork7 browser session",
+          trainer: cork7Agent.trainerStatus(),
+          capturedAt: new Date().toISOString()
+        });
+      }
       if (action === "act") return json(res, 200, await cork7Agent.act({ keys: input.keys, durationMs: input.durationMs }));
       if (action === "restart") return json(res, 200, await cork7Agent.restart());
       if (action === "train-start") {

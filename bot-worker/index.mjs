@@ -194,7 +194,16 @@ function advance(s, genome) {
   pushTrace(s);
 }
 function fitness(s) {
-  return s.score + s.z * 0.115 + s.landings * 58 + s.rails * 78 - s.missed * 20 - s.crashes * 115;
+  const profile = coachProfile;
+  const cleanRate = profile ? profile.observedCleanLandingRate : 0.75;
+  const repeatRate = profile ? profile.observedRepeatRate : 0.25;
+  const landingWeight = 58 + Math.round((1 - cleanRate) * 70);
+  const crashPenalty = 115 + Math.round((1 - cleanRate) * 100);
+  const varietyWeight = 8 + Math.round(repeatRate * 28);
+  const uniqueTricks = new Set(s.tricks).size;
+  return s.score + s.z * 0.115 + s.landings * landingWeight +
+    s.rails * 78 - s.missed * 20 - s.crashes * crashPenalty +
+    uniqueTricks * varietyWeight;
 }
 function tournament(sorted) {
   let best = sorted[Math.floor(Math.random() * Math.max(6, Math.ceil(sorted.length * 0.65)))];
@@ -228,7 +237,7 @@ function mutate(g) {
 
 let genomes = Array.from({ length: POP_SIZE }, makeGenome);
 let generation = 1, agentIndex = 0, runsFinished = 0, totalLandings = 0;
-let bestFitness = -Infinity, bestReplay = null, history = [], trickBook = {};
+let bestFitness = -Infinity, bestReplay = null, history = [], trickBook = {}, coachProfile = null;
 let mutationSigma = 0.15, stagnantGenerations = 0, training = false;
 let currentState = makeState(), startedAt = null, lastSavedAt = 0, saving = false;
 
@@ -240,7 +249,7 @@ async function saveState() {
     const snapshot = {
       version: 1, training, generation, agentIndex, runsFinished, totalLandings,
       bestFitness, bestReplay, history, trickBook, mutationSigma, stagnantGenerations,
-      genomes, currentState, savedAt: new Date().toISOString()
+      coachProfile, genomes, currentState, savedAt: new Date().toISOString()
     };
     const tmp = STATE_FILE + ".tmp";
     await fs.writeFile(tmp, JSON.stringify(snapshot));
@@ -265,6 +274,7 @@ async function loadState() {
     bestReplay = d.bestReplay || null;
     history = Array.isArray(d.history) ? d.history.slice(-100) : [];
     trickBook = d.trickBook || {};
+    coachProfile = d.coachProfile || null;
     mutationSigma = d.mutationSigma || 0.15;
     stagnantGenerations = d.stagnantGenerations || 0;
     genomes = d.genomes;
@@ -359,6 +369,15 @@ function safeStatus() {
     },
     history,
     tricks: Object.entries(trickBook).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([name, count]) => ({ name, count })),
+    coachProfile: coachProfile ? {
+      park: coachProfile.park,
+      techniqueIndex: coachProfile.techniqueIndex,
+      observedCleanLandingRate: coachProfile.observedCleanLandingRate,
+      targetCleanLandingRate: coachProfile.targetCleanLandingRate,
+      observedRepeatRate: coachProfile.observedRepeatRate,
+      targetVariety: coachProfile.targetVariety,
+      updatedAt: coachProfile.updatedAt
+    } : null,
     lastCheckpoint: lastSavedAt ? new Date(lastSavedAt).toISOString() : null,
     serverTime: new Date().toISOString(),
     uptimeSeconds: Math.round(process.uptime())
@@ -378,6 +397,19 @@ function json(res, status, body) {
   });
   res.end(JSON.stringify(body));
 }
+async function readJsonBody(req, maxBytes = 12000) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > maxBytes) throw new Error("Request body is too large.");
+    chunks.push(chunk);
+  }
+  if (!size) return {};
+  const value = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid JSON object.");
+  return value;
+}
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || "/", "http://localhost");
   if (req.method === "GET" && url.pathname === "/health") {
@@ -389,6 +421,35 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && url.pathname === "/api/status") return json(res, 200, safeStatus());
   if (req.method === "GET" && url.pathname === "/api/replay") {
     return bestReplay ? json(res, 200, bestReplay) : json(res, 404, { error: "No best run has been saved yet" });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/coach") {
+    let input;
+    try {
+      input = await readJsonBody(req);
+    } catch (error) {
+      return json(res, 400, { error: error.message || "Invalid coach profile." });
+    }
+    const m = input.metrics && typeof input.metrics === "object" ? input.metrics : {};
+    const total = clamp(Number(m.totalLandings) || 0, 0, 500);
+    const clean = clamp(Number(m.cleanLandings) || 0, 0, total);
+    const tricks = clamp(Number(m.tricks) || 0, 0, 500);
+    const unique = clamp(Number(m.uniqueTricks) || 0, 0, tricks);
+    const repeats = clamp(Number(m.repeatTricks) || 0, 0, tricks);
+    const landingRate = total > 0 ? clean / total : 0.7;
+    const repeatRate = tricks > 0 ? repeats / tricks : 0.25;
+    const varietyRate = tricks > 0 ? unique / tricks : 0.45;
+    coachProfile = {
+      park: String(input.park || "Unknown").slice(0, 32),
+      techniqueIndex: clamp(Math.round(Number(input.techniqueIndex) || 0), 0, 100),
+      observedCleanLandingRate: Number(landingRate.toFixed(3)),
+      targetCleanLandingRate: Number(clamp(landingRate + 0.12, 0.68, 0.95).toFixed(3)),
+      observedRepeatRate: Number(repeatRate.toFixed(3)),
+      targetVariety: Number(clamp(varietyRate + 0.15, 0.35, 0.9).toFixed(3)),
+      updatedAt: new Date().toISOString()
+    };
+    await saveState();
+    return json(res, 200, { ok: true, message: "AI Lab training profile updated.", coachProfile });
   }
 
   if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });

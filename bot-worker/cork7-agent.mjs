@@ -1,4 +1,6 @@
 import { chromium } from "playwright";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 const GAME_URL = "https://cork7.com/";
 const PARKS = new Set(["APEX", "THE YARD", "SHIRAKUMO", "FOREST LINE", "BIG AIR", "BELLEVUE", "ASPEN PIPE"]);
@@ -46,6 +48,204 @@ export class Cork7Agent {
     this.lastError = null;
     this.park = "APEX";
     this.actionCount = 0;
+    this.training = false;
+    this.trainingTask = null;
+    this.coachProfile = null;
+    this.stateFile = path.join(process.env.DATA_DIR || "/data", "cork7-training.json");
+    this.trainer = { generation: 1, runsFinished: 0, bestScore: null, bestPolicy: null, history: [] };
+  }
+
+  async restoreTrainer() {
+    try {
+      const value = JSON.parse(await fs.readFile(this.stateFile, "utf8"));
+      if (value && value.version === 1) {
+        this.trainer = {
+          generation: Number(value.generation) || 1,
+          runsFinished: Number(value.runsFinished) || 0,
+          bestScore: Number.isFinite(value.bestScore) ? value.bestScore : null,
+          bestPolicy: value.bestPolicy || null,
+          history: Array.isArray(value.history) ? value.history.slice(-80) : []
+        };
+      }
+    } catch (error) {
+      if (error.code !== "ENOENT") this.lastError = "Could not restore Cork7 trainer state: " + error.message;
+    }
+  }
+
+  async saveTrainer() {
+    await fs.mkdir(path.dirname(this.stateFile), { recursive: true });
+    const value = { version: 1, ...this.trainer, coachProfile: this.coachProfile, savedAt: new Date().toISOString() };
+    const tmp = this.stateFile + ".tmp";
+    await fs.writeFile(tmp, JSON.stringify(value));
+    await fs.rename(tmp, this.stateFile);
+  }
+
+  trainerStatus() {
+    return {
+      training: this.training,
+      generation: this.trainer.generation,
+      runsFinished: this.trainer.runsFinished,
+      bestScore: this.trainer.bestScore,
+      bestPolicy: this.trainer.bestPolicy,
+      history: this.trainer.history.slice(-12),
+      coachProfile: this.coachProfile ? {
+        park: this.coachProfile.park,
+        targetCleanLandingRate: this.coachProfile.targetCleanLandingRate,
+        targetVariety: this.coachProfile.targetVariety,
+        updatedAt: this.coachProfile.updatedAt
+      } : null
+    };
+  }
+
+  setCoachProfile(profile) {
+    this.coachProfile = profile && typeof profile === "object" ? profile : null;
+    return this.trainerStatus();
+  }
+
+  randomPolicy() {
+    const start = [10500, 23000, 35500, 48000];
+    const grabKeys = ["q", "e", "Shift", null];
+    const events = start.map((base, index) => {
+      const spin = Math.random() < 0.5 ? "a" : "d";
+      const flip = Math.random() < 0.5 ? "w" : "s";
+      const grab = grabKeys[Math.floor(Math.random() * grabKeys.length)];
+      const keys = [spin, flip, grab].filter(Boolean);
+      return {
+        atMs: Math.max(6000, base + Math.round((Math.random() - 0.5) * 6000)),
+        keys,
+        durationMs: 180 + Math.round(Math.random() * 560),
+        id: index + 1
+      };
+    });
+    return { events: events.sort((a, b) => a.atMs - b.atMs), createdAt: new Date().toISOString() };
+  }
+
+  nextPolicy() {
+    if (!this.trainer.bestPolicy || Math.random() < 0.22) return this.randomPolicy();
+    const parent = this.trainer.bestPolicy;
+    const events = parent.events.map((event, index) => {
+      const keys = event.keys.slice();
+      if (Math.random() < 0.3) {
+        const spinAt = keys.findIndex(key => key === "a" || key === "d");
+        if (spinAt >= 0) keys[spinAt] = keys[spinAt] === "a" ? "d" : "a";
+      }
+      if (Math.random() < 0.28) {
+        const flipAt = keys.findIndex(key => key === "w" || key === "s");
+        if (flipAt >= 0) keys[flipAt] = keys[flipAt] === "w" ? "s" : "w";
+        else keys.push(Math.random() < 0.5 ? "w" : "s");
+      }
+      if (Math.random() < 0.22) {
+        const grabAt = keys.findIndex(key => key === "q" || key === "e" || key === "Shift");
+        if (grabAt >= 0) keys[grabAt] = ["q", "e", "Shift"][Math.floor(Math.random() * 3)];
+        else if (keys.length < 3) keys.push(["q", "e", "Shift"][Math.floor(Math.random() * 3)]);
+      }
+      const landingFocus = this.coachProfile && Number(this.coachProfile.observedCleanLandingRate) < 0.72;
+      const duration = Math.max(160, Math.min(900,
+        event.durationMs + Math.round((Math.random() - 0.5) * (landingFocus ? 260 : 420))));
+      const atMs = Math.max(6000, event.atMs + Math.round((Math.random() - 0.5) * 5000));
+      return { id: index + 1, atMs, keys: [...new Set(keys)].slice(0, 3), durationMs: duration };
+    });
+    return { events: events.sort((a, b) => a.atMs - b.atMs), createdAt: new Date().toISOString() };
+  }
+
+  async startTraining() {
+    if (!this.page || this.page.isClosed()) throw new Error("Launch a Cork7 Solo session before starting the trainer.");
+    if (this.training) return this.trainerStatus();
+    this.training = true;
+    this.lastError = null;
+    this.trainingTask = this.runTrainingLoop().catch(error => {
+      this.lastError = "Trainer stopped: " + String(error?.message || error).slice(0, 240);
+      this.training = false;
+    });
+    return this.trainerStatus();
+  }
+
+  async pauseTraining() {
+    this.training = false;
+    return this.trainerStatus();
+  }
+
+  async waitUntil(targetTime, maxStep = 300) {
+    while (this.training && Date.now() < targetTime) {
+      const remaining = targetTime - Date.now();
+      await sleep(Math.min(maxStep, Math.max(30, remaining)));
+    }
+  }
+
+  async runOnePolicy(policy) {
+    if (!this.page || this.page.isClosed()) throw new Error("Cork7 browser session closed.");
+    const initial = await this.status();
+    if (initial.phase === "results" || this.trainer.runsFinished > 0) {
+      await this.page.keyboard.down("r");
+      await sleep(2200);
+      await this.page.keyboard.up("r").catch(() => {});
+      await this.page.waitForTimeout(1800);
+      await this.page.keyboard.press("f").catch(() => {});
+      await this.page.waitForTimeout(1000);
+    }
+
+    this.lastAction = "Running a Cork7 Solo training attempt";
+    const runStarted = Date.now();
+    for (const event of policy.events) {
+      if (!this.training) return { cancelled: true };
+      await this.waitUntil(runStarted + event.atMs);
+      if (!this.training) return { cancelled: true };
+      const before = await this.status();
+      if (before.phase === "results") break;
+      const pressed = event.keys;
+      for (const key of pressed) await this.page.keyboard.down(key);
+      try { await sleep(event.durationMs); }
+      finally { for (const key of pressed) await this.page.keyboard.up(key).catch(() => {}); }
+      this.actionCount++;
+      this.lastAction = "AI policy " + event.id + ": " + pressed.join(" + ") + " for " + event.durationMs + " ms";
+    }
+
+    const deadline = Date.now() + 145000;
+    let result = await this.status();
+    while (this.training && Date.now() < deadline) {
+      if (result.phase === "results") break;
+      await sleep(1200);
+      result = await this.status();
+    }
+    if (!this.training) return { cancelled: true };
+    if (result.phase !== "results") {
+      throw new Error("The bot did not detect Cork7's results screen within 145 seconds. Last page text: " + cleanText(result.pageText).slice(0, 500));
+    }
+    if (result.score == null) {
+      throw new Error("Cork7 reached the results screen, but its score was not readable from page text. The captured screen is available for HUD integration.");
+    }
+    return { score: result.score, policy, phase: result.phase, capturedAt: result.capturedAt };
+  }
+
+  async runTrainingLoop() {
+    while (this.training) {
+      const policy = this.nextPolicy();
+      try {
+        const result = await this.runOnePolicy(policy);
+        if (result.cancelled) break;
+        this.trainer.runsFinished++;
+        if (this.trainer.bestScore == null || result.score > this.trainer.bestScore) {
+          this.trainer.bestScore = result.score;
+          this.trainer.bestPolicy = policy;
+        }
+        this.trainer.history.push({
+          run: this.trainer.runsFinished,
+          generation: this.trainer.generation,
+          score: result.score,
+          best: this.trainer.bestScore,
+          capturedAt: result.capturedAt
+        });
+        if (this.trainer.history.length > 80) this.trainer.history.shift();
+        this.trainer.generation = 1 + Math.floor(this.trainer.runsFinished / 6);
+        this.lastAction = "Training run " + this.trainer.runsFinished + " scored " + result.score.toLocaleString();
+        await this.saveTrainer();
+        await sleep(1200);
+      } catch (error) {
+        this.lastError = String(error?.message || error).slice(0, 500);
+        this.training = false;
+      }
+    }
+    return this.trainerStatus();
   }
 
   async ensureBrowser() {
@@ -182,6 +382,7 @@ export class Cork7Agent {
       lastError: this.lastError,
       pageTitle: this.page && !this.page.isClosed() ? await this.page.title().catch(() => "") : "",
       pageText: cleanText(text),
+      trainer: this.trainerStatus(),
       elapsedSeconds: this.startedAt ? Math.round((Date.now() - this.startedAt) / 1000) : 0,
       capturedAt: new Date().toISOString()
     };
@@ -229,9 +430,10 @@ export class Cork7Agent {
     try { if (this.browser) await this.browser.close(); } catch {}
     this.browser = null;
     this.context = null;
+    this.training = false;
     this.page = null;
     this.startedAt = null;
     this.lastAction = "Cork7 browser session closed";
-    return { connected: false, site: "cork7.com", lastAction: this.lastAction };
+    return { connected: false, site: "cork7.com", lastAction: this.lastAction, trainer: this.trainerStatus() };
   }
 }

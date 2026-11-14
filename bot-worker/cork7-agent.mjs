@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 const GAME_URL = "https://cork7.com/";
-const PARKS = new Set(["APEX", "THE YARD", "SHIRAKUMO", "FOREST LINE", "BIG AIR", "BELLEVUE", "ASPEN PIPE"]);
+const PARKS = new Set(["APEX"]);
 const KEY_ALIASES = new Map([
   ["SPACE", "Space"], [" ", "Space"], ["LEFT", "ArrowLeft"], ["RIGHT", "ArrowRight"],
   ["ARROWLEFT", "ArrowLeft"], ["ARROWRIGHT", "ArrowRight"], ["ARROWUP", "ArrowUp"], ["ARROWDOWN", "ArrowDown"],
@@ -324,7 +324,7 @@ export class Cork7Agent {
 
   async start({ park = "APEX" } = {}) {
     const chosenPark = String(park || "APEX").trim().toUpperCase();
-    if (!PARKS.has(chosenPark)) throw new Error("Unsupported Cork7 park. Choose APEX, THE YARD, SHIRAKUMO, FOREST LINE, BIG AIR or BELLEVUE.");
+    if (!PARKS.has(chosenPark)) throw new Error("This trainer is configured specifically for the APEX map.");
     if (this.page && !this.page.isClosed()) {
       return this.status({ screenshot: true });
     }

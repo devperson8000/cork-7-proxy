@@ -347,7 +347,7 @@ export class Cork7Agent {
       // The normal solo flow shows Ride after the park is selected.
       text = await this.readText();
       const rideClicked = await this.clickVisibleText("Ride Solo") || await this.clickVisibleText("Ride");
-      if (!rideClicked && /ride|start|\\benter\\b/i.test(text)) {
+      if (!rideClicked && /ride|start/i.test(text)) {
         await this.page.keyboard.press("Enter").catch(() => {});
       }
 

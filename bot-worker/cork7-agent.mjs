@@ -47,6 +47,7 @@ export class Cork7Agent {
     this.startedAt = null;
     this.lastAction = "Not connected";
     this.lastError = null;
+    this.starting = false;
     this.park = "APEX";
     this.actionCount = 0;
     this.training = false;
@@ -372,9 +373,10 @@ export class Cork7Agent {
     const text = await this.readText();
     const canvasCount = this.page && !this.page.isClosed()
       ? await this.page.locator("canvas").count().catch(() => 0) : 0;
-    const phase = detectPhase(text, canvasCount);
+    const phase = this.starting ? "starting" : detectPhase(text, canvasCount);
     const data = {
       connected: !!(this.page && !this.page.isClosed()),
+      starting: this.starting,
       site: "cork7.com",
       mode: "Solo / unsigned browser session",
       park: this.park,
@@ -431,6 +433,8 @@ export class Cork7Agent {
   }
 
   async close() {
+    this.training = false;
+    this.starting = false;
     try { if (this.browser) await this.browser.close(); } catch {}
     this.browser = null;
     this.context = null;

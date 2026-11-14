@@ -1,4 +1,4 @@
-const ALLOWED = new Set(["status", "replay", "start", "pause", "resume", "reset", "coach", "cork7-status", "cork7-snapshot", "cork7-start", "cork7-act", "cork7-restart", "cork7-stop"]);
+const ALLOWED = new Set(["status", "replay", "start", "pause", "resume", "reset", "coach", "cork7-status", "cork7-snapshot", "cork7-start", "cork7-act", "cork7-restart", "cork7-stop", "cork7-train-start", "cork7-train-pause"]);
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store, max-age=0");

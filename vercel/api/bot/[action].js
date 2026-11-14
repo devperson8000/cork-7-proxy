@@ -11,7 +11,7 @@ module.exports = async function handler(req, res) {
   const token = process.env.APEX_BOT_TOKEN;
   if (!base || !token) {
     return res.status(503).json({
-      error: "Northflank worker is not connected yet. Finish the service setup and add APEX_BOT_URL in Vercel."
+      error: "Northflank worker is not connected yet. Add APEX_BOT_URL and APEX_BOT_TOKEN in Vercel after configuring the Northflank worker."
     });
   }
 

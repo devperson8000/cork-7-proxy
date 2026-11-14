@@ -34,7 +34,7 @@ function detectPhase(text, canvasCount) {
   const value = String(text || "").toLowerCase();
   if (/watch replay|save replay|run complete|run finished|ride again|total score/.test(value)) return "results";
   if (/choose a park|pick a park|ride solo|select park/.test(value)) return "park-select";
-  const homeMenu = /solo\\s+picked/.test(value) && /\\bride\\b/.test(value);
+  const homeMenu = /solo\s+picked/.test(value) && /\bride\b/.test(value);
   if (canvasCount > 0 && !homeMenu) return "game";
   if (homeMenu || /multiplayer|basecamp|locker|sign in|checking account/.test(value)) return "lobby";
   return canvasCount > 0 ? "game" : "loading";

@@ -147,7 +147,7 @@ const chart = $("learningChart"), chartCtx = chart.getContext("2d");
 const video = $("bestVideo");
 let statusData = null, bestReplay = null, playback = null, recorder = null, chunks = [], videoUrl = null;
 let pollBusy = false, replayBusy = false, lastStatusAt = 0, currentFrame = null;
-let cork7PollTimer = null;
+let cork7PollTimer = null, cork7PollErrors = 0;
 const FEATURES = [
   {type:"jump",z:145,lane:-.42},{type:"rail",z:310,lane:.48,len:62},
   {type:"jump",z:490,lane:.45},{type:"rail",z:665,lane:-.48,len:68},
@@ -160,23 +160,36 @@ function api(action,method="GET",payload=null){
 }
 function startCork7Polling(){
   if(cork7PollTimer)clearInterval(cork7PollTimer);
+  cork7PollErrors=0;
   cork7PollTimer=setInterval(async()=>{
     try{
       const data=await cork7Request("snapshot");
+      cork7PollErrors=0;
       if(!data.connected&&!data.starting){
         clearInterval(cork7PollTimer);
         cork7PollTimer=null;
       }
     }catch(error){
-      $("c7SessionStatus").textContent="Live Cork7 status unavailable: "+error.message;
-      clearInterval(cork7PollTimer);
-      cork7PollTimer=null;
+      cork7PollErrors++;
+      $("c7SessionStatus").textContent="Northflank worker connection failed ("+cork7PollErrors+"/8): "+error.message+
+        (cork7PollErrors<8?" · Retrying automatically…":" · Automatic retries stopped. Check that the Northflank service is running.");
+      if(cork7PollErrors>=8){
+        clearInterval(cork7PollTimer);
+        cork7PollTimer=null;
+      }
     }
   },4000);
 }
 function renderCork7(data){
-  $("c7Phase").textContent=data.connected?String(data.phase||"CONNECTED").toUpperCase():"NOT CONNECTED";
-  $("c7SessionStatus").textContent=data.connected?"Connected to "+data.site+" · "+data.mode+" · "+data.park:"Cork7 browser session is closed.";
+  const starting=!!data.starting||data.phase==="starting";
+  $("c7Phase").textContent=starting?"STARTING":data.connected?String(data.phase||"CONNECTED").toUpperCase():(data.lastError?"START FAILED":"NOT CONNECTED");
+  $("c7SessionStatus").textContent=starting
+    ?"Chromium is starting and Cork7 is loading. The dashboard will keep checking the worker."
+    :data.connected
+      ?"Connected to "+data.site+" · "+data.mode+" · "+data.park
+      :data.lastError
+        ?"Cork7 launch failed: "+data.lastError
+        :"No active Cork7 browser session is connected.";
   $("c7Details").textContent="Score detected: "+(data.score==null?"not readable yet":Number(data.score).toLocaleString())+" · canvas: "+(data.canvasCount||0)+" · actions: "+(data.actionCount||0)+" · "+(data.lastAction||"");
   const trainer=data.trainer||{};
   $("c7TrainerStats").textContent="AI "+(trainer.training?"TRAINING":"PAUSED")+" · Generation "+(trainer.generation||1)+" · Runs "+(trainer.runsFinished||0)+" · Best Cork7 score "+(trainer.bestScore==null?"—":Number(trainer.bestScore).toLocaleString())+(trainer.coachProfile?" · Coach profile active":" · No player coach profile yet");

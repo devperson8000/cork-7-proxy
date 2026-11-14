@@ -344,10 +344,12 @@ export class Cork7Agent {
         return this.status({ screenshot: true });
       }
 
-      // Solo is the default mode on the public landing screen. If another mode
-      // is selected, click Solo; never open account or multiplayer flows.
+      // Pick Solo from the Basecamp mode selector, then press RIDE to open
+      // the park map. The park selection screen contains the separate Ride Solo
+      // confirmation action.
       if (!/solo\s+picked/i.test(text)) await this.clickVisibleText("Solo");
-      await this.page.keyboard.press("Enter").catch(() => {});
+      const rideBasecamp = await this.clickVisibleText("Ride");
+      if (!rideBasecamp) await this.page.keyboard.press("Enter").catch(() => {});
       await this.page.waitForTimeout(3500);
 
       text = await this.readText();
@@ -357,29 +359,29 @@ export class Cork7Agent {
         await this.page.waitForTimeout(900);
       }
 
-      // The normal solo flow shows Ride after the park is selected.
       text = await this.readText();
-      const rideClicked = await this.clickVisibleText("Ride Solo") || await this.clickVisibleText("Ride");
-      if (!rideClicked && /ride|start/i.test(text)) {
-        await this.page.keyboard.press("Enter").catch(() => {});
-      }
+      const rideSolo = await this.clickVisibleText("Ride Solo") || await this.clickVisibleText("Ride");
+      if (!rideSolo && /ride|start/i.test(text)) await this.page.keyboard.press("Enter").catch(() => {});
 
       await this.page.waitForTimeout(12000);
+      // The route marks startup while this method runs. Clear it before
+      // checking the resulting page phase, otherwise status stays "starting".
+      this.starting = false;
       const afterNavigation = await this.status();
       if (afterNavigation.phase === "game") {
         await this.page.keyboard.press("f").catch(() => {});
         await this.page.waitForTimeout(1500);
-        this.lastAction = "Solo game loaded; F sent to skip the gondola";
+        this.lastAction = "APEX Solo game loaded; F sent to skip the gondola";
       } else {
-        this.lastAction = "Cork7 opened; the Solo park view is not confirmed yet";
+        this.lastAction = "Cork7 opened; Solo park/run view is not confirmed yet";
       }
       return await this.status({ screenshot: true });
     } catch (error) {
+      this.starting = false;
       this.lastError = String(error?.message || error).slice(0, 400);
       return await this.status({ screenshot: true });
     }
   }
-
   async readText() {
     if (!this.page || this.page.isClosed()) return "";
     try {

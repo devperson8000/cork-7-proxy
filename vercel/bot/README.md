@@ -1,19 +1,13 @@
-# Apex Lab — Cork7-style AI Trainer
+# Apex Lab Cloud Dashboard
 
-A static, free-to-host machine-learning playground served at `/bot/` by the existing Vercel project.
+This is the Vercel control UI. It sends Start / Pause / Resume / Reset commands through a Vercel serverless API route. The bearer token is never exposed to browser JavaScript.
 
-## What it does
+The AI training loop, neural policy, evolution and checkpoints run in Northflank, independently of the laptop or browser.
 
-- Runs a neural-network rider policy in an original Apex-style freestyle course simulation.
-- Uses neuroevolution: tournament selection, elite preservation, crossover, adaptive Gaussian mutation, and a novelty bonus for discovering varied clean trick combinations.
-- Displays the active rider, simulator points, learning curve, and discovered trick families.
-- Saves policy weights, training history, trick discoveries, and the best replay in the current browser's local storage.
-- Replays the best saved run and records a WebM clip from the canvas when browser recording is supported.
+Set these Vercel Production environment variables:
+- `APEX_BOT_URL`: public HTTPS base URL of the Northflank `apex-bot-worker` service, without a trailing path.
+- `APEX_BOT_TOKEN`: the same random bearer token as the worker's `BOT_CONTROL_TOKEN`.
 
-## Free hosting model
+The dashboard proxies requests through `/api/bot/[action]`; only fixed, allowlisted actions are forwarded.
 
-Vercel serves the static page. The training computation runs in the visitor's browser while the page is open; it is not a server-side process. Saved progress is browser-local and is not shared between devices.
-
-## Scope
-
-This is an original training simulation with simplified skiing physics and an Apex-inspired line. It does not inspect, control, or submit runs to the official Cork7 service.
+Best-run frames are stored by the worker on the persistent Northflank volume. The browser renders those frames to WebM when the replay is opened.

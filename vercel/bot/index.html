@@ -139,6 +139,26 @@
       </aside>
     </main>
 
+    <section class="panel" style="margin-top:16px">
+      <div class="panel-head">
+        <div><div class="panel-title">REAL CORK7 SESSION</div><div class="panel-meta" style="margin-top:4px">MANUAL SESSION BRIDGE / APEX</div></div>
+        <div class="panel-meta">OFFICIAL GAME</div>
+      </div>
+      <div class="best-content">
+        <div class="subhead" style="max-width:900px;margin-bottom:12px">
+          Open Cork7 and choose APEX to ride yourself. When you save or export a run clip in Cork7, import the video here to watch it alongside the AI's best simulator run. This bridge does not send inputs to Cork7 or submit runs.
+        </div>
+        <div class="best-actions" style="margin-bottom:12px">
+          <a class="btn primary" href="https://cork7.com" target="_blank" rel="noopener noreferrer" style="text-decoration:none;text-align:center">Open official Cork7 ↗</a>
+          <label class="btn" for="userClipInput" style="display:flex;align-items:center;justify-content:center;cursor:pointer">Import my Cork7 clip
+            <input id="userClipInput" type="file" accept="video/*" hidden>
+          </label>
+        </div>
+        <video id="userClip" controls playsinline hidden></video>
+        <div class="small-note" id="userClipStatus">No personal Cork7 clip imported yet. Imported video stays in this browser session.</div>
+      </div>
+    </section>
+
     <section class="method" aria-label="Learning methods">
       <div class="method-card"><div class="num">01 / POLICY LEARNING</div><strong>Neural-network rider</strong><p>A compact neural policy maps the rider's position, speed, feature distance and airtime into steering, pop, spin, grab and balance decisions.</p></div>
       <div class="method-card"><div class="num">02 / IMPROVEMENT</div><strong>Neuroevolution</strong><p>Better policies survive. The next generation uses elite preservation, crossover and adaptive mutations to explore stronger behaviours.</p></div>
@@ -610,6 +630,23 @@
     generation=1;agentIndex=0;runsFinished=0;totalLandings=0;bestFitness=-Infinity;bestScoreValue=0;bestReplay=null;history=[];trickBook={};mutationSigma=.15;stagnantGenerations=0;globalImprovement=0;
     initPopulation();playback=null;setTraining(true);updateDashboard();
   }
+
+  let importedClipUrl = null;
+  $("userClipInput").addEventListener("change", event => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    if (!file.type.startsWith("video/")) {
+      $("userClipStatus").textContent = "Please choose a video file exported from your Cork7 session.";
+      event.target.value = "";
+      return;
+    }
+    if (importedClipUrl) URL.revokeObjectURL(importedClipUrl);
+    importedClipUrl = URL.createObjectURL(file);
+    const personalVideo = $("userClip");
+    personalVideo.src = importedClipUrl;
+    personalVideo.hidden = false;
+    $("userClipStatus").textContent = "Loaded: " + file.name + " · " + (file.size / 1048576).toFixed(1) + " MB";
+  });
 
   $("pauseBtn").addEventListener("click",()=>setTraining(!training));
   $("resetBtn").addEventListener("click",resetLearning);

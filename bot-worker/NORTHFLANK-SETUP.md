@@ -63,9 +63,28 @@ Open the service's **Volumes** section and create a volume:
 
 This is required. Without a persistent volume, learning checkpoints can be lost when the container is replaced. The worker writes `/data/apex-state.json` and restores it on restart.
 
-## 6. Resources and free allowance
+## 6. Resources — stay inside the free Sandbox allowance
 
-**Important:** the old `256 MB` simulator allocation is too small for Chromium + Cork7's WebGL 2 game. The live browser agent needs at least **1 GiB memory**, with **2 GiB recommended** for more reliable WebGL sessions, and one shared vCPU or more. Use only resources already available in your organisation's current allowance. Do not purchase an upgrade just for this. If the current allocation cannot provide 1 GiB, the simulator may still run but the real Cork7 browser session is likely to be killed for memory.
+**Do not upgrade to a paid Northflank plan or add a payment method for this project.** Northflank currently lists the free Sandbox as including up to **US$20/month of Northflank Cloud resources**, across the free resource allowance. The allowance is shared with the other services/addons in the account, not reserved just for this bot.
+
+The worker is currently reporting **244 MB RAM and 0.1 vCPU** (`nf-compute-10`). That is too small for Chromium + Cork7 WebGL. Do not keep retrying the browser at that size.
+
+The smallest official plan worth testing for this browser is:
+
+- Plan ID: `nf-compute-50`
+- Resources: **0.5 shared vCPU + 1,024 MB RAM**
+- Published list price: **US$12/month** at continuous use, billed by the second
+
+This is only a candidate **if** the Northflank Sandbox resource selector offers it for this account and the Billing/Usage estimate confirms that all services together remain within the existing US$20 monthly free allowance. If the updated estimate exceeds the free allowance, cancel the change and keep the current settings. Do not select `nf-compute-100-2` (2 GB) because its published US$24/month price exceeds the entire free resource allowance by itself.
+
+To check/change it in Northflank:
+
+1. Open the `apex-bot-worker` service and go to **Resources**.
+2. Check the available compute plans and select `nf-compute-50` only if it is offered within your Sandbox account.
+3. Review **Billing → Usage** and confirm the total estimated monthly resource use stays at or below US$20, including your existing Cork7 proxy service, any database/addons, persistent disk, and egress.
+4. If the total remains within the allowance, choose **Update & restart**. Otherwise cancel and leave the current plan unchanged.
+
+The dashboard and worker will allow a browser launch only when the worker reports at least **1,024 MB RAM** and at least **0.25 vCPU**. The smaller viewport and software-rendering settings reduce load, but a 0.5-vCPU shared allocation may still be slow or throttled. This is a minimum test configuration, not a guarantee that every Cork7 WebGL session will run smoothly.
 
 ## 7. Health check
 

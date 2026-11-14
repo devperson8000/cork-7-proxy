@@ -444,6 +444,486 @@ async function playReplay(){
   $("liveTag").textContent=statusData?.training?"AI RIDER / TRAINING":"AI RIDER / PAUSED";
   if(currentFrame)drawScene(currentFrame);
 }
+
+let ownerAuthorized=false;
+let localGameLoading=false;
+let localGameLoaded=false;
+let localTraining=false;
+let localTrainer={generation:1,runsFinished:0,bestScore:null,bestPolicy:null,history:[]};
+let localTrainingTask=null;
+let localStatusTimer=null;
+let localPageError="";
+let localActiveKeys=new Set();
+
+const localSleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+function setOwnerStatus(message,isError=false){
+  const node=$("ownerStatus");
+  node.textContent=message;
+  node.style.color=isError?"#ffb36b":"";
+}
+function refreshOwnerControls(){
+  const state={
+    c7Start:localGameLoading||localGameLoaded,
+    c7Restart:!localGameLoaded||localTraining,
+    c7Stop:!localGameLoaded,
+    c7TrainStart:!localGameLoaded||localTraining,
+    c7TrainPause:!localTraining
+  };
+  for(const [id,disabled] of Object.entries(state)){
+    const node=$(id);
+    if(node)node.dataset.ownerStateDisabled=disabled?"1":"0";
+  }
+  for(const node of document.querySelectorAll("[data-owner-only]")){
+    const stateDisabled=node.dataset.ownerStateDisabled==="1";
+    const localKey=node.hasAttribute("data-c7key")&&!localGameLoaded;
+    node.disabled=!ownerAuthorized||stateDisabled||localKey;
+  }
+  $("ownerLogin").hidden=ownerAuthorized;
+  $("ownerPasscode").hidden=ownerAuthorized;
+  $("ownerLogout").hidden=!ownerAuthorized;
+}
+async function checkOwnerSession(){
+  try{
+    const data=await api("owner-session");
+    ownerAuthorized=!!data.authenticated;
+    setOwnerStatus(ownerAuthorized?"Owner verified. Private controls are unlocked.":"Controls are locked. Enter your private owner code.");
+  }catch(error){
+    ownerAuthorized=false;
+    setOwnerStatus("Could not verify owner access: "+error.message,true);
+  }
+  refreshOwnerControls();
+}
+async function loginOwner(){
+  const input=$("ownerPasscode");
+  const button=$("ownerLogin");
+  button.disabled=true;
+  setOwnerStatus("Checking owner access…");
+  try{
+    const data=await api("owner-login","POST",{passcode:input.value});
+    ownerAuthorized=!!data.authenticated;
+    input.value="";
+    setOwnerStatus(ownerAuthorized?"Owner verified. Private controls are unlocked.":"Owner access was not granted.",!ownerAuthorized);
+  }catch(error){
+    setOwnerStatus(error.message,true);
+  }finally{
+    button.disabled=false;
+    refreshOwnerControls();
+  }
+}
+async function logoutOwner(){
+  try{await api("owner-logout","POST",{});}catch{}
+  ownerAuthorized=false;
+  localTraining=false;
+  releaseLocalKeys();
+  refreshOwnerControls();
+  setOwnerStatus("Controls locked. This browser session has been signed out.");
+}
+
+function getLocalGameContext(){
+  const host=$("c7LocalPlayer");
+  if(!host||!host.contentDocument)throw new Error("The local Cork7 player page has not loaded yet.");
+  const playerDoc=host.contentDocument;
+  const gameFrame=playerDoc.querySelector(".game-frame iframe");
+  if(!gameFrame)throw new Error("The Scramjet player has loaded, but its Cork7 game frame is not ready yet.");
+  let gameDoc;
+  try{gameDoc=gameFrame.contentDocument;}catch(error){throw new Error("The game frame is isolated from the dashboard by browser security. The local runner cannot read or control it through this proxy yet.");}
+  if(!gameDoc||!gameDoc.body)throw new Error("The Cork7 game document is still loading. Try Refresh view in a moment.");
+  return {host,playerDoc,frame:gameFrame,doc:gameDoc,win:gameFrame.contentWindow};
+}
+function localGameText(ctx){
+  try{return (ctx.doc.body?.innerText||ctx.doc.body?.textContent||"").replace(/\\s+/g," ").trim().slice(0,4500);}
+  catch{return "";}
+}
+function localDetectScore(text){
+  const patterns=[
+    /(?:TOTAL\\s+SCORE|FINAL\\s+SCORE|RUN\\s+SCORE|SCORE)\\s*[:\\n-]?\\s*([\\d,]{2,})/i,
+    /([\\d,]{3,})\\s*(?:PTS|POINTS)\\b/i
+  ];
+  for(const pattern of patterns){
+    const match=String(text||"").match(pattern);
+    if(match){
+      const score=Number(match[1].replace(/,/g,""));
+      if(Number.isSafeInteger(score)&&score>=0)return score;
+    }
+  }
+  return null;
+}
+function localDetectPhase(text,canvasCount){
+  const value=String(text||"").toLowerCase();
+  if(/watch replay|save replay|run complete|run finished|ride again|total score/.test(value))return "results";
+  if(/choose a park|pick a park|ride solo|select park/.test(value))return "park-select";
+  const homeMenu=/solo\\s+picked/.test(value)&&/\\bride\\b/.test(value);
+  if(canvasCount>0&&!homeMenu)return "game";
+  if(homeMenu)return "lobby";
+  if(canvasCount>0)return "game";
+  if(/solo|multiplayer|basecamp|locker|sign in|checking account/.test(value))return "lobby";
+  return "loading";
+}
+function localReadStatus(){
+  const ctx=getLocalGameContext();
+  const text=localGameText(ctx);
+  const canvasCount=ctx.doc.querySelectorAll("canvas").length;
+  return {ctx,text,canvasCount,score:localDetectScore(text),phase:localDetectPhase(text,canvasCount),title:ctx.doc.title||""};
+}
+function renderLocalStatus(status){
+  localGameLoaded=true;
+  $("c7Phase").textContent="LOCAL / "+String(status.phase||"READY").toUpperCase();
+  $("c7SessionStatus").textContent="Cork7 is running inside this browser on your computer. Game access: same-origin proxy frame verified.";
+  $("c7Details").textContent="LOCAL COMPUTER · "+status.phase.toUpperCase()+" · Score "+(status.score==null?"not readable yet":status.score.toLocaleString())+" · Canvas "+status.canvasCount;
+  $("c7PageText").textContent="Local game runner: active\nRuntime: this browser / this computer\nPage: "+status.title+"\nPhase: "+status.phase+"\nScore: "+(status.score==null?"not detected":status.score)+"\n\n"+status.text;
+  refreshOwnerControls();
+}
+async function waitForLocalGame(timeoutMs=60000){
+  const host=$("c7LocalPlayer");
+  if(!host.src||host.src==="about:blank"||host.src.endsWith("about:blank")){
+    host.src="/c7/";
+    $("c7ScreenEmpty").style.display="none";
+  }
+  host.classList.add("is-open");
+  $("c7ScreenEmpty").hidden=true;
+  const start=Date.now();
+  let lastMessage="";
+  while(Date.now()-start<timeoutMs){
+    try{
+      const status=localReadStatus();
+      if(status.canvasCount>0||status.text.length>0)return status;
+    }catch(error){lastMessage=error.message;}
+    await localSleep(500);
+  }
+  if(lastMessage)throw new Error(lastMessage);
+  throw new Error("Cork7 did not finish loading in the local browser frame. Check the game panel and press Refresh view.");
+}
+function findLocalTextTarget(ctx,label){
+  const candidates=ctx.doc.querySelectorAll("button,[role='button'],a,[tabindex],div,span");
+  for(const node of candidates){
+    if(!node.getBoundingClientRect().width||!node.getBoundingClientRect().height)continue;
+    const text=(node.innerText||node.textContent||"").trim();
+    if(text.toLowerCase()===label.toLowerCase())return node;
+  }
+  return null;
+}
+async function localClickText(label){
+  try{
+    const ctx=getLocalGameContext();
+    const target=findLocalTextTarget(ctx,label);
+    if(!target)return false;
+    target.click();
+    await localSleep(900);
+    return true;
+  }catch{return false;}
+}
+async function tryEnterSolo(){
+  let status;
+  try{status=localReadStatus();}catch{return null;}
+  if(status.phase==="game"||status.phase==="results")return status;
+  const text=status.text.toLowerCase();
+  if(text.includes("solo")&&!text.includes("solo picked")){
+    await localClickText("Solo");
+  }
+  status=localReadStatus();
+  if(status.phase==="lobby"||status.phase==="park-select"){
+    if(/\\bride\\b/.test(status.text.toLowerCase()))await localClickText("Ride");
+  }
+  status=localReadStatus();
+  if(status.phase==="park-select"||/apex/.test(status.text.toLowerCase())){
+    await localClickText("APEX");
+    await localClickText("Ride Solo");
+    if(status.text.toLowerCase().includes("ride solo"))await localClickText("Ride");
+  }
+  await localSleep(1800);
+  try{return localReadStatus();}catch{return null;}
+}
+async function startCork7(){
+  if(!ownerAuthorized)throw new Error("Unlock owner controls before opening the local training session.");
+  if(localGameLoading)return;
+  localGameLoading=true;
+  refreshOwnerControls();
+  $("c7SessionStatus").textContent="Opening the Cork7 player on this computer…";
+  try{
+    const status=await waitForLocalGame();
+    const ready=await tryEnterSolo()||status;
+    renderLocalStatus(ready);
+    if(ready.phase!=="game"&&ready.phase!=="results"){
+      $("c7SessionStatus").textContent="The local game is loaded. Complete the Solo → APEX → Ride Solo menus inside the game panel, then press Start AI trainer.";
+    }
+    startLocalStatusPolling();
+  }catch(error){
+    localPageError=error.message;
+    $("c7Phase").textContent="LOCAL ACCESS CHECK";
+    $("c7SessionStatus").textContent=error.message;
+    $("c7PageText").textContent="Browser runner could not attach to the Cork7 game frame.\n"+error.message;
+  }finally{
+    localGameLoading=false;
+    refreshOwnerControls();
+  }
+}
+async function observeCork7(){
+  try{
+    const remote=await api("cork7-status");
+    renderCork7(remote);
+    if(remote.trainer){
+      localTrainer={
+        generation:Number(remote.trainer.generation)||1,
+        runsFinished:Number(remote.trainer.runsFinished)||0,
+        bestScore:Number.isFinite(remote.trainer.bestScore)?remote.trainer.bestScore:null,
+        bestPolicy:remote.trainer.bestPolicy||null,
+        history:Array.isArray(remote.trainer.history)?remote.trainer.history.slice(-80):[]
+      };
+      updateLocalTrainerDisplay();
+    }
+  }catch(error){
+    $("c7Details").textContent="Northflank checkpoint service: "+error.message;
+  }
+  if(localGameLoaded){
+    try{renderLocalStatus(localReadStatus());}catch(error){$("c7SessionStatus").textContent=error.message;}
+  }
+}
+function startLocalStatusPolling(){
+  if(localStatusTimer)clearInterval(localStatusTimer);
+  localStatusTimer=setInterval(()=>{
+    if(!localGameLoaded)return;
+    try{renderLocalStatus(localReadStatus());}catch(error){localPageError=error.message;$("c7SessionStatus").textContent=error.message;}
+  },1200);
+}
+function localKeyCode(key){
+  if(key==="Space")return {key:" ",code:"Space"};
+  if(key==="Shift")return {key:"Shift",code:"ShiftLeft"};
+  if(key.startsWith("Arrow"))return {key,code:key};
+  return {key,code:"Key"+key.toUpperCase()};
+}
+function dispatchLocalKey(ctx,key,type){
+  const info=localKeyCode(key);
+  try{ctx.frame.focus();ctx.win.focus();}catch{}
+  const target=(ctx.doc.activeElement&&ctx.doc.activeElement!==ctx.doc.body)
+    ?ctx.doc.activeElement:(ctx.doc.querySelector("canvas")||ctx.doc.body||ctx.doc.documentElement);
+  const event=new ctx.win.KeyboardEvent(type,{key:info.key,code:info.code,bubbles:true,cancelable:true,composed:true});
+  target.dispatchEvent(event);
+}
+function releaseLocalKeys(){
+  if(!localGameLoaded)return;
+  try{
+    const ctx=getLocalGameContext();
+    for(const key of localActiveKeys)dispatchLocalKey(ctx,key,"keyup");
+  }catch{}
+  localActiveKeys.clear();
+}
+async function holdLocalKeys(keys,durationMs){
+  const ctx=getLocalGameContext();
+  const normalized=[...new Set(keys)];
+  for(const key of normalized){dispatchLocalKey(ctx,key,"keydown");localActiveKeys.add(key);}
+  try{await localSleep(Math.max(50,Math.min(1400,Number(durationMs)||250)));}
+  finally{
+    for(const key of normalized){
+      dispatchLocalKey(ctx,key,"keyup");
+      localActiveKeys.delete(key);
+    }
+  }
+}
+async function restartCork7(){
+  if(!ownerAuthorized)throw new Error("Owner access is required.");
+  await holdLocalKeys(["r"],2200);
+  await localSleep(1800);
+  try{renderLocalStatus(localReadStatus());}catch{}
+}
+async function actCork7(key){
+  if(!ownerAuthorized)throw new Error("Owner access is required.");
+  await holdLocalKeys([key],280);
+  try{renderLocalStatus(localReadStatus());}catch{}
+}
+function randomLocalPolicy(){
+  const takeoffs=[14500,33000,51500,70500];
+  const grabSets=[[],["q"],["e"],["Shift"],["q","e"]];
+  const events=takeoffs.map((base,index)=>{
+    const spin=Math.random()<.5?"a":"d";
+    const flip=Math.random()<.5?"w":"s";
+    const grabs=grabSets[Math.floor(Math.random()*grabSets.length)];
+    const extra=Math.random()<.22?["ArrowUp"]:[];
+    const keys=[...new Set([spin,flip,...grabs,...extra])].slice(0,5);
+    return {id:index+1,atMs:Math.max(7000,base+Math.round((Math.random()-.5)*6000)),preloadMs:280+Math.round(Math.random()*440),keys,durationMs:260+Math.round(Math.random()*620)};
+  });
+  return {events:events.sort((a,b)=>a.atMs-b.atMs),createdAt:new Date().toISOString()};
+}
+function nextLocalPolicy(){
+  if(!localTrainer.bestPolicy||!Array.isArray(localTrainer.bestPolicy.events)||Math.random()<.22)return randomLocalPolicy();
+  const parent=localTrainer.bestPolicy;
+  const events=parent.events.map((event,index)=>{
+    const keys=(event.keys||[]).slice();
+    if(Math.random()<.3){
+      const at=keys.findIndex(key=>key==="a"||key==="d");
+      if(at>=0)keys[at]=keys[at]==="a"?"d":"a";
+    }
+    if(Math.random()<.28){
+      const at=keys.findIndex(key=>key==="w"||key==="s");
+      if(at>=0)keys[at]=keys[at]==="w"?"s":"w";
+      else keys.push(Math.random()<.5?"w":"s");
+    }
+    if(Math.random()<.22){
+      const at=keys.findIndex(key=>key==="q"||key==="e"||key==="Shift");
+      if(at>=0)keys[at]=["q","e","Shift"][Math.floor(Math.random()*3)];
+      else if(keys.length<3)keys.push(["q","e","Shift"][Math.floor(Math.random()*3)]);
+    }
+    return {
+      id:index+1,
+      atMs:Math.max(7000,(Number(event.atMs)||14500)+Math.round((Math.random()-.5)*4000)),
+      preloadMs:Math.max(220,Math.min(850,(Number(event.preloadMs)||450)+Math.round((Math.random()-.5)*260))),
+      keys:[...new Set(keys)].slice(0,5),
+      durationMs:Math.max(200,Math.min(1050,(Number(event.durationMs)||420)+Math.round((Math.random()-.5)*380)))
+    };
+  });
+  return {events:events.sort((a,b)=>a.atMs-b.atMs),createdAt:new Date().toISOString()};
+}
+async function waitLocalUntil(target){
+  while(localTraining&&Date.now()<target)await localSleep(Math.min(250,Math.max(30,target-Date.now())));
+}
+async function runLocalPolicy(policy){
+  let status=localReadStatus();
+  if(status.phase==="results"){
+    await holdLocalKeys(["r"],2200);
+    await localSleep(1800);
+    await holdLocalKeys(["f"],250);
+    await localSleep(1200);
+    status=localReadStatus();
+  }
+  if(status.phase!=="game")throw new Error("The Cork7 Solo run is not active yet. Open the game panel, complete Solo → APEX → Ride Solo, and start the actual run before training.");
+  const started=Date.now();
+  for(const event of policy.events){
+    if(!localTraining)return {cancelled:true};
+    await waitLocalUntil(started+Math.max(0,event.atMs-(event.preloadMs||400)));
+    if(!localTraining)return {cancelled:true};
+    status=localReadStatus();
+    if(status.phase==="results")break;
+    await holdLocalKeys(["Space"],event.preloadMs||400);
+    if(!localTraining)return {cancelled:true};
+    await holdLocalKeys(event.keys,event.durationMs);
+  }
+  const deadline=Date.now()+210000;
+  status=localReadStatus();
+  while(localTraining&&Date.now()<deadline&&status.phase!=="results"){
+    await localSleep(1000);
+    status=localReadStatus();
+  }
+  if(!localTraining)return {cancelled:true};
+  if(status.phase!=="results")throw new Error("The browser runner did not detect the Cork7 results screen after 210 seconds. No score has been invented or recorded.");
+  if(status.score==null)throw new Error("Cork7 reached its results screen, but the score is not exposed as readable page text. Training is paused until score capture can be connected.");
+  return {score:status.score,policy,capturedAt:new Date().toISOString()};
+}
+function updateLocalTrainerDisplay(){
+  $("c7TrainerStats").textContent=(localTraining?"AI TRAINING ON THIS COMPUTER":"AI STOPPED")+
+    " · Generation "+localTrainer.generation+
+    " · Real Cork7 runs "+localTrainer.runsFinished+
+    " · Best actual score "+(localTrainer.bestScore==null?"—":localTrainer.bestScore.toLocaleString())+
+    " · Checkpoints saved to Northflank";
+  $("c7TrainStart").textContent=localTraining?"Training active":"Start AI trainer";
+}
+async function syncLocalTrainer(){
+  if(!ownerAuthorized)throw new Error("Owner access is required to save training data.");
+  const payload={
+    training:localTraining,
+    generation:localTrainer.generation,
+    runsFinished:localTrainer.runsFinished,
+    bestScore:localTrainer.bestScore,
+    bestPolicy:localTrainer.bestPolicy,
+    history:localTrainer.history.slice(-80)
+  };
+  await api("cork7-client-training","POST",payload);
+  updateLocalTrainerDisplay();
+}
+async function startLocalTraining(){
+  if(!ownerAuthorized)throw new Error("Unlock owner controls first.");
+  if(!localGameLoaded)await startCork7();
+  const status=localReadStatus();
+  if(status.phase!=="game"&&status.phase!=="results"){
+    throw new Error("Cork7 is open on this computer, but it is not in an active APEX Solo run yet. Complete the Solo → APEX → Ride Solo selection in the game panel, then press Start AI trainer.");
+  }
+  if(localTraining)return;
+  localTraining=true;
+  updateLocalTrainerDisplay();
+  refreshOwnerControls();
+  await syncLocalTrainer();
+  localTrainingTask=(async()=>{
+    while(localTraining){
+      const policy=nextLocalPolicy();
+      try{
+        const result=await runLocalPolicy(policy);
+        if(result.cancelled)break;
+        localTrainer.runsFinished++;
+        if(localTrainer.bestScore==null||result.score>localTrainer.bestScore){
+          localTrainer.bestScore=result.score;
+          localTrainer.bestPolicy=policy;
+        }
+        localTrainer.history.push({
+          run:localTrainer.runsFinished,
+          generation:localTrainer.generation,
+          score:result.score,
+          best:localTrainer.bestScore,
+          capturedAt:result.capturedAt
+        });
+        if(localTrainer.history.length>80)localTrainer.history.shift();
+        localTrainer.generation=1+Math.floor(localTrainer.runsFinished/6);
+        $("c7SessionStatus").textContent="Actual Cork7 run "+localTrainer.runsFinished+" completed. Score captured: "+result.score.toLocaleString()+". The next policy is being tested.";
+        updateLocalTrainerDisplay();
+        await syncLocalTrainer();
+        await localSleep(900);
+      }catch(error){
+        localTraining=false;
+        $("c7SessionStatus").textContent="Training paused: "+error.message;
+        break;
+      }
+    }
+    releaseLocalKeys();
+    updateLocalTrainerDisplay();
+    refreshOwnerControls();
+    try{await syncLocalTrainer();}catch(error){$("c7SessionStatus").textContent+=" Checkpoint sync failed: "+error.message;}
+  })();
+}
+async function stopLocalTraining(){
+  localTraining=false;
+  releaseLocalKeys();
+  updateLocalTrainerDisplay();
+  refreshOwnerControls();
+  try{await syncLocalTrainer();}catch(error){$("c7SessionStatus").textContent="Training stopped locally, but checkpoint sync failed: "+error.message;}
+}
+async function trainCork7(action){
+  const starting=action==="train-start";
+  const button=starting?$("c7TrainStart"):$("c7TrainPause");
+  if(!ownerAuthorized){setOwnerStatus("Unlock owner controls before training.",true);return;}
+  button.disabled=true;
+  try{
+    if(starting)await startLocalTraining();
+    else await stopLocalTraining();
+  }catch(error){
+    localTraining=false;
+    $("c7SessionStatus").textContent=error.message;
+    updateLocalTrainerDisplay();
+    refreshOwnerControls();
+  }finally{refreshOwnerControls();}
+}
+async function stopCork7(){
+  if(!ownerAuthorized)throw new Error("Owner access is required.");
+  await stopLocalTraining();
+  if(localStatusTimer){clearInterval(localStatusTimer);localStatusTimer=null;}
+  localGameLoaded=false;
+  localGameLoading=false;
+  $("c7LocalPlayer").src="about:blank";
+  $("c7LocalPlayer").classList.remove("is-open");
+  $("c7ScreenEmpty").hidden=false;
+  $("c7ScreenEmpty").style.display="grid";
+  $("c7Phase").textContent="LOCAL GAME CLOSED";
+  $("c7SessionStatus").textContent="The local Cork7 browser session is closed. Northflank checkpoints have been retained.";
+  $("c7Details").textContent="Game and trainer are stopped.";
+  refreshOwnerControls();
+}
+function setConnected(connected,running){
+  const pill=$("connectionPill");
+  pill.classList.toggle("online",connected);pill.classList.toggle("running",connected&&running);
+  $("connectionText").textContent=!connected?"WORKER NOT CONNECTED":running?"LOCAL TRAINING ACTIVE":"CHECKPOINT WORKER ONLINE";
+  $("liveTag").textContent=!connected?"LOCAL GAME / NOT OPEN":running?"AI RIDER / LOCAL TRAINING":"AI RIDER / READY";
+  $("startBtn").disabled=!connected||running;$("pauseBtn").disabled=!connected||!running;
+  $("resumeBtn").disabled=!connected||running;$("resetBtn").disabled=!connected;
+  $("replayBtn").disabled=!(statusData&&statusData.bestRun);
+  refreshOwnerControls();
+}
+
 $("startBtn").addEventListener("click",()=>command("start"));
 $("pauseBtn").addEventListener("click",()=>command("pause"));
 $("resumeBtn").addEventListener("click",()=>command("resume"));
@@ -451,6 +931,10 @@ $("resetBtn").addEventListener("click",()=>{if(confirm("Reset the cloud AI's lea
 $("replayBtn").addEventListener("click",loadReplay);
 window.addEventListener("resize",fitCanvas);
 fitCanvas();poll();setInterval(poll,2500);
+$("ownerLogin").addEventListener("click",loginOwner);
+$("ownerLogout").addEventListener("click",logoutOwner);
+$("ownerPasscode").addEventListener("keydown",event=>{if(event.key==="Enter")loginOwner();});
+["startBtn","pauseBtn","resumeBtn","resetBtn"].forEach(id=>$(id).dataset.ownerOnly="1");
 $("c7Start").addEventListener("click",startCork7);
 $("c7Observe").addEventListener("click",observeCork7);
 $("c7Restart").addEventListener("click",restartCork7);
@@ -458,6 +942,7 @@ $("c7TrainStart").addEventListener("click",()=>trainCork7("train-start"));
 $("c7TrainPause").addEventListener("click",()=>trainCork7("train-pause"));
 $("c7Stop").addEventListener("click",stopCork7);
 document.querySelectorAll("[data-c7key]").forEach(button=>button.addEventListener("click",()=>actCork7(button.dataset.c7key)));
+checkOwnerSession();
 observeCork7();
 })();
 </script>

@@ -2,11 +2,13 @@ import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import { Cork7Agent } from "./cork7-agent.mjs";
 
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = process.env.DATA_DIR || "/data";
 const STATE_FILE = path.join(DATA_DIR, "apex-state.json");
 const TOKEN = process.env.BOT_CONTROL_TOKEN || "";
+const cork7Agent = new Cork7Agent();
 const POP_SIZE = 16, INPUTS = 10, HIDDEN = 12, OUTPUTS = 5;
 const TRACK_END = 1120, EPISODE_STEPS = 700, STEPS_PER_TICK = 8;
 const TICK_MS = 40;
@@ -418,6 +420,24 @@ const server = http.createServer(async (req, res) => {
   if (!url.pathname.startsWith("/api/")) return json(res, 404, { error: "Not found" });
   if (!authorized(req)) return json(res, 401, { error: "Unauthorized" });
 
+  if (url.pathname.startsWith("/api/cork7/")) {
+    const action = url.pathname.slice("/api/cork7/".length);
+    try {
+      if (req.method === "GET" && action === "status") {
+        return json(res, 200, await cork7Agent.status({ screenshot: url.searchParams.get("screenshot") === "1" }));
+      }
+      if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });
+      const input = await readJsonBody(req, 8000);
+      if (action === "start") return json(res, 200, await cork7Agent.start({ park: input.park || "APEX" }));
+      if (action === "act") return json(res, 200, await cork7Agent.act({ keys: input.keys, durationMs: input.durationMs }));
+      if (action === "restart") return json(res, 200, await cork7Agent.restart());
+      if (action === "stop") return json(res, 200, await cork7Agent.close());
+      return json(res, 404, { error: "Unknown Cork7 action" });
+    } catch (error) {
+      return json(res, 400, { error: String(error?.message || error).slice(0, 500) });
+    }
+  }
+
   if (req.method === "GET" && url.pathname === "/api/status") return json(res, 200, safeStatus());
   if (req.method === "GET" && url.pathname === "/api/replay") {
     return bestReplay ? json(res, 200, bestReplay) : json(res, 404, { error: "No best run has been saved yet" });
@@ -485,6 +505,7 @@ setInterval(() => { if (training || Date.now() - lastSavedAt > 30000) void saveS
 async function shutdown() {
   training = false;
   await saveState();
+  await cork7Agent.close().catch(() => {});
   server.close(() => process.exit(0));
 }
 process.on("SIGTERM", shutdown);

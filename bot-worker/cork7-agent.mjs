@@ -36,8 +36,10 @@ function detectPhase(text, canvasCount) {
   if (/choose a park|pick a park|ride solo|select park/.test(value)) return "park-select";
   const homeMenu = /solo\s+picked/.test(value) && /\bride\b/.test(value);
   if (canvasCount > 0 && !homeMenu) return "game";
-  if (homeMenu || /multiplayer|basecamp|locker|sign in|checking account/.test(value)) return "lobby";
-  return canvasCount > 0 ? "game" : "loading";
+  if (homeMenu) return "lobby";
+  if (canvasCount > 0) return "game";
+  if (/solo|multiplayer|basecamp|locker|sign in|checking account/.test(value)) return "lobby";
+  return "loading";
 }
 
 export class Cork7Agent {
@@ -107,23 +109,21 @@ export class Cork7Agent {
   }
 
   randomPolicy() {
-    const start = [14500, 33000, 51500, 70500];
-    const grabKeys = ["q", "e", "Shift", null];
-    const events = [];
-    start.forEach((base, index) => {
-      const lipTime = Math.max(5500, base - 1250 + Math.round((Math.random() - 0.5) * 1800));
+    const takeoffTimes = [14500, 33000, 51500, 70500];
+    const events = takeoffTimes.map((base, index) => {
       const spin = Math.random() < 0.5 ? "a" : "d";
       const flip = Math.random() < 0.5 ? "w" : "s";
-      const grab = grabKeys[Math.floor(Math.random() * grabKeys.length)];
-      const rodeo = Math.random() < 0.28;
-      const keys = [spin, flip, grab, ...(rodeo ? ["ArrowUp"] : [])].filter(Boolean);
-      events.push({ atMs: lipTime, keys: ["Space"], durationMs: 220 + Math.round(Math.random() * 360), id: index * 2 + 1 });
-      events.push({
-        atMs: lipTime + 350,
-        keys: [...new Set(keys)].slice(0, 4),
-        durationMs: 220 + Math.round(Math.random() * 520),
-        id: index * 2 + 2
-      });
+      const grabSets = [[], ["q"], ["e"], ["Shift"], ["q", "e"]];
+      const grabs = grabSets[Math.floor(Math.random() * grabSets.length)];
+      const rodeo = Math.random() < 0.22 ? ["ArrowUp"] : [];
+      const keys = [...new Set([spin, flip, ...grabs, ...rodeo])].slice(0, 5);
+      return {
+        atMs: Math.max(7000, base + Math.round((Math.random() - 0.5) * 6000)),
+        preloadMs: 280 + Math.round(Math.random() * 440),
+        keys,
+        durationMs: 260 + Math.round(Math.random() * 620),
+        id: index + 1
+      };
     });
     return { events: events.sort((a, b) => a.atMs - b.atMs), createdAt: new Date().toISOString() };
   }
@@ -148,10 +148,12 @@ export class Cork7Agent {
         else if (keys.length < 3) keys.push(["q", "e", "Shift"][Math.floor(Math.random() * 3)]);
       }
       const landingFocus = this.coachProfile && Number(this.coachProfile.observedCleanLandingRate) < 0.72;
-      const duration = Math.max(160, Math.min(900,
-        event.durationMs + Math.round((Math.random() - 0.5) * (landingFocus ? 260 : 420))));
-      const atMs = Math.max(6000, event.atMs + Math.round((Math.random() - 0.5) * 5000));
-      return { id: index + 1, atMs, keys: [...new Set(keys)].slice(0, 3), durationMs: duration };
+      const duration = Math.max(200, Math.min(1050,
+        event.durationMs + Math.round((Math.random() - 0.5) * (landingFocus ? 220 : 380))));
+      const atMs = Math.max(7000, event.atMs + Math.round((Math.random() - 0.5) * 4000));
+      const preloadMs = Math.max(220, Math.min(850,
+        (event.preloadMs || 450) + Math.round((Math.random() - 0.5) * 260)));
+      return { id: index + 1, atMs, preloadMs, keys: [...new Set(keys)].slice(0, 5), durationMs: duration };
     });
     return { events: events.sort((a, b) => a.atMs - b.atMs), createdAt: new Date().toISOString() };
   }
@@ -198,19 +200,30 @@ export class Cork7Agent {
     const runStarted = Date.now();
     for (const event of policy.events) {
       if (!this.training) return { cancelled: true };
-      await this.waitUntil(runStarted + event.atMs);
+      const preloadStart = runStarted + Math.max(0, event.atMs - (event.preloadMs || 400));
+      await this.waitUntil(preloadStart);
       if (!this.training) return { cancelled: true };
       const before = await this.status();
       if (before.phase === "results") break;
+
+      // Cork7 charges Space before the kicker. Releasing at take-off is
+      // followed immediately by a combined spin/flip/grab input at the lip.
+      await this.page.keyboard.down("Space");
+      try {
+        await sleep(event.preloadMs || 400);
+      } finally {
+        await this.page.keyboard.up("Space").catch(() => {});
+      }
+      if (!this.training) return { cancelled: true };
       const pressed = event.keys;
       for (const key of pressed) await this.page.keyboard.down(key);
       try { await sleep(event.durationMs); }
       finally { for (const key of pressed) await this.page.keyboard.up(key).catch(() => {}); }
       this.actionCount++;
-      this.lastAction = "AI policy " + event.id + ": " + pressed.join(" + ") + " for " + event.durationMs + " ms";
+      this.lastAction = "AI feature " + event.id + ": pop preload " + (event.preloadMs || 400) + " ms; " + pressed.join(" + ") + " for " + event.durationMs + " ms";
     }
 
-    const deadline = Date.now() + 145000;
+    const deadline = Date.now() + 210000;
     let result = await this.status();
     while (this.training && Date.now() < deadline) {
       if (result.phase === "results") break;
@@ -219,7 +232,7 @@ export class Cork7Agent {
     }
     if (!this.training) return { cancelled: true };
     if (result.phase !== "results") {
-      throw new Error("The bot did not detect Cork7's results screen within 145 seconds. Last page text: " + cleanText(result.pageText).slice(0, 500));
+      throw new Error("The bot did not detect Cork7's results screen within 210 seconds. Last page text: " + cleanText(result.pageText).slice(0, 500));
     }
     if (result.score == null) {
       throw new Error("Cork7 reached the results screen, but its score was not readable from page text. The captured screen is available for HUD integration.");
@@ -442,6 +455,7 @@ export class Cork7Agent {
   async close() {
     this.training = false;
     this.starting = false;
+    await this.saveTrainer().catch(() => {});
     try { if (this.browser) await this.browser.close(); } catch {}
     this.browser = null;
     this.context = null;

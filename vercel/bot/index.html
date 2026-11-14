@@ -88,16 +88,6 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
           <button class="btn" data-c7key="ArrowUp" data-owner-only disabled>↑</button><button class="btn" data-c7key="ArrowDown" data-owner-only disabled>↓</button>
         </div>
         <div class="realgame-status"><span class="realgame-dot">LIVE FEEDBACK</span> <span id="c7Details">Waiting for browser session.</span></div>
-        <div class="panel-meta">BUILT-IN KNOWLEDGE / STARTER CURRICULUM</div>
-        <div class="realgame-status">
-          <strong>What the bot knows before its first run</strong>
-          <div>• Hold Space, then release to pop at a kicker.</div>
-          <div>• A / D spin; W / S flip; arrow keys add air roll.</div>
-          <div>• Spin + flip must begin together at take-off for bio / cork tricks.</div>
-          <div>• Shift / Q / E are grabs. A grab needs at least 0.25 seconds; release before landing.</div>
-          <div>• A clean landing and varied tricks matter. The first seven verified runs test known patterns; later runs mutate the best-scoring pattern.</div>
-          <div id="c7CurrentStrategy" style="margin-top:7px;color:var(--muted)">Strategy queue: seven built-in baselines, then experience-led evolution.</div>
-        </div>
         <div class="panel-meta">REAL-GAME SCORE TRAINER / EXPERIMENTAL</div>
         <div class="realgame-controls">
           <button class="btn primary" id="c7TrainStart" data-owner-only disabled>Start AI trainer</button>
@@ -461,7 +451,6 @@ let localGameLoading=false;
 let localGameLoaded=false;
 let localTraining=false;
 let localTrainer={generation:1,runsFinished:0,bestScore:null,bestPolicy:null,history:[]};
-let localCurrentPolicy="";
 let localTrainingTask=null;
 let localStatusTimer=null;
 let localPageError="";
@@ -544,13 +533,13 @@ function getLocalGameContext(){
   return {host,playerDoc,frame:gameFrame,doc:gameDoc,win:gameFrame.contentWindow};
 }
 function localGameText(ctx){
-  try{return (ctx.doc.body?.innerText||ctx.doc.body?.textContent||"").replace(/\s+/g," ").trim().slice(0,4500);}
+  try{return (ctx.doc.body?.innerText||ctx.doc.body?.textContent||"").replace(/\\s+/g," ").trim().slice(0,4500);}
   catch{return "";}
 }
 function localDetectScore(text){
   const patterns=[
-    /(?:TOTAL\s+SCORE|FINAL\s+SCORE|RUN\s+SCORE|SCORE)\s*[:\n-]?\s*([\d,]{2,})/i,
-    /([\d,]{3,})\s*(?:PTS|POINTS)\b/i
+    /(?:TOTAL\\s+SCORE|FINAL\\s+SCORE|RUN\\s+SCORE|SCORE)\\s*[:\\n-]?\\s*([\\d,]{2,})/i,
+    /([\\d,]{3,})\\s*(?:PTS|POINTS)\\b/i
   ];
   for(const pattern of patterns){
     const match=String(text||"").match(pattern);
@@ -561,119 +550,29 @@ function localDetectScore(text){
   }
   return null;
 }
-function localDetectPhase(text,canvasCount,runtimePhase,score){
+function localDetectPhase(text,canvasCount){
   const value=String(text||"").toLowerCase();
-  if(/watch replay|save replay|run complete|run finished|ride again|total score|results/.test(value))return "results";
-  if(String(runtimePhase||"").toLowerCase().includes("result"))return "results";
-  if(score!=null&&/finished|complete|replay|results/.test(String(runtimePhase||"").toLowerCase()))return "results";
+  if(/watch replay|save replay|run complete|run finished|ride again|total score/.test(value))return "results";
   if(/choose a park|pick a park|ride solo|select park/.test(value))return "park-select";
-  const homeMenu=/solo\s+picked/.test(value)&&/\bride\b/.test(value);
+  const homeMenu=/solo\\s+picked/.test(value)&&/\\bride\\b/.test(value);
   if(canvasCount>0&&!homeMenu)return "game";
   if(homeMenu)return "lobby";
   if(canvasCount>0)return "game";
   if(/solo|multiplayer|basecamp|locker|sign in|checking account/.test(value))return "lobby";
   return "loading";
 }
-function localReadRuntimeSignals(ctx){
-  const scores=[];
-  const phases=[];
-  const runtimeKeys=[];
-  const addScore=(source,value)=>{
-    let n=NaN;
-    if(typeof value==="number")n=value;
-    else if(typeof value==="string"){
-      const m=value.match(/(?:score|points?)\D{0,12}([\d,]{2,})/i)||value.match(/^([\d,]{3,})$/);
-      if(m)n=Number(m[1].replace(/,/g,""));
-    }
-    if(Number.isSafeInteger(n)&&n>=0&&n<=100000000)scores.push({source,score:n});
-  };
-  const seen=new Set();
-  const scoreNames=/(score|points|runScore|totalScore)/i;
-  function inspectObject(obj,path,depth){
-    if(!obj||typeof obj!=="object"||depth>2||seen.has(obj)||obj.nodeType)return;
-    seen.add(obj);
-    let keys=[];
-    try{keys=Object.getOwnPropertyNames(obj).slice(0,100);}catch{return;}
-    for(const key of keys){
-      let descriptor;
-      try{descriptor=Object.getOwnPropertyDescriptor(obj,key);}catch{continue;}
-      if(!descriptor||!("value" in descriptor))continue;
-      const value=descriptor.value;
-      if(scoreNames.test(key))addScore(path+"."+key,value);
-      if(/^(phase|screen|sceneName|gameState|mode)$/i.test(key)&&
-        (typeof value==="string"||typeof value==="number"))phases.push(String(value));
-      if(depth<2&&/(game|state|run|result|hud|stats|player|app|ride|score|session)/i.test(key)&&value&&typeof value==="object"){
-        inspectObject(value,path+"."+key,depth+1);
-      }
-    }
-  }
-  try{
-    const nodes=ctx.doc.querySelectorAll("[data-score],[aria-label],[class],[id]");
-    for(const node of Array.from(nodes).slice(0,350)){
-      const attrs=["data-score","aria-label","class","id"];
-      const label=attrs.map(k=>node.getAttribute?.(k)||"").join(" ");
-      if(/score|points|result/i.test(label)){
-        addScore("DOM "+label.slice(0,100),node.getAttribute?.("data-score")||node.getAttribute?.("aria-label")||node.textContent||"");
-      }
-    }
-  }catch{}
-  try{
-    const names=Object.getOwnPropertyNames(ctx.win).filter(k=>/cork|game|score|ride|hud|state|root|app|session/i.test(k)).slice(0,80);
-    for(const key of names){
-      runtimeKeys.push(key);
-      let descriptor;
-      try{descriptor=Object.getOwnPropertyDescriptor(ctx.win,key);}catch{continue;}
-      if(descriptor&&"value" in descriptor&&descriptor.value&&typeof descriptor.value==="object"){
-        inspectObject(descriptor.value,"window."+key,0);
-      }
-    }
-  }catch{}
-  try{
-    const storage=ctx.win.localStorage;
-    const storageKeys=[];
-    for(let i=0;i<Math.min(storage.length,250);i++){
-      const key=storage.key(i)||"";
-      if(!/(score|run|replay|history|record)/i.test(key))continue;
-      storageKeys.push(key);
-      const raw=storage.getItem(key);
-      if(raw&&raw.length<100000){
-        try{inspectObject(JSON.parse(raw),"localStorage."+key,0);}catch{addScore("localStorage."+key,raw);}
-      }
-    }
-    runtimeKeys.push(...storageKeys.slice(0,20).map(k=>"storage:"+k));
-  }catch{}
-  return {
-    score:scores.length?scores[0]:null,
-    scores:scores.slice(0,12),
-    phase:phases.find(v=>/result|finish|complete|run|ride|game/i.test(v))||null,
-    runtimeKeys:runtimeKeys.slice(0,30)
-  };
-}
 function localReadStatus(){
   const ctx=getLocalGameContext();
   const text=localGameText(ctx);
-  const canvas=ctx.doc.querySelector("canvas");
   const canvasCount=ctx.doc.querySelectorAll("canvas").length;
-  const signals=localReadRuntimeSignals(ctx);
-  const textScore=localDetectScore(text);
-  const score=textScore!=null?textScore:(signals.score?signals.score.score:null);
-  return {
-    ctx,text,canvasCount,score,
-    scoreSource:textScore!=null?"page text":(signals.score?signals.score.source:null),
-    phase:localDetectPhase(text,canvasCount,signals.phase,score),
-    runtimePhase:signals.phase,
-    runtimeKeys:signals.runtimeKeys,
-    scoreCandidates:signals.scores,
-    canvasSize:canvas?{width:canvas.width,height:canvas.height}:null,
-    title:ctx.doc.title||""
-  };
+  return {ctx,text,canvasCount,score:localDetectScore(text),phase:localDetectPhase(text,canvasCount),title:ctx.doc.title||""};
 }
 function renderLocalStatus(status){
   localGameLoaded=true;
   $("c7Phase").textContent="LOCAL / "+String(status.phase||"READY").toUpperCase();
   $("c7SessionStatus").textContent="Cork7 is running inside this browser on your computer. Game access: same-origin proxy frame verified.";
   $("c7Details").textContent="LOCAL COMPUTER · "+status.phase.toUpperCase()+" · Score "+(status.score==null?"not readable yet":status.score.toLocaleString())+" · Canvas "+status.canvasCount;
-  $("c7PageText").textContent="Local game runner: active\nRuntime: this browser / this computer\nPage: "+status.title+"\nPhase: "+status.phase+"\nScore: "+(status.score==null?"not detected":status.score)+"\nScore source: "+(status.scoreSource||"not detected")+"\nCanvas: "+(status.canvasSize?status.canvasSize.width+"×"+status.canvasSize.height:"none")+"\nRuntime keys: "+(status.runtimeKeys||[]).join(", ")+"\n\n"+status.text;
+  $("c7PageText").textContent="Local game runner: active\nRuntime: this browser / this computer\nPage: "+status.title+"\nPhase: "+status.phase+"\nScore: "+(status.score==null?"not detected":status.score)+"\n\n"+status.text;
   refreshOwnerControls();
 }
 async function waitForLocalGame(timeoutMs=60000){
@@ -796,20 +695,10 @@ function localKeyCode(key){
 }
 function dispatchLocalKey(ctx,key,type){
   const info=localKeyCode(key);
-  const keyCode=key==="Space"?32:key==="Shift"?16:
-    key==="ArrowLeft"?37:key==="ArrowUp"?38:key==="ArrowRight"?39:key==="ArrowDown"?40:
-    (key.length===1?key.toUpperCase().charCodeAt(0):0);
   try{ctx.frame.focus();ctx.win.focus();}catch{}
-  const canvas=ctx.doc.querySelector("canvas");
-  if(canvas){
-    if(canvas.tabIndex<0)canvas.tabIndex=0;
-    try{canvas.focus({preventScroll:true});}catch{}
-  }
-  const target=canvas||ctx.doc.activeElement||ctx.doc.body||ctx.doc.documentElement;
-  const event=new ctx.win.KeyboardEvent(type,{
-    key:info.key,code:info.code,keyCode,which:keyCode,
-    bubbles:true,cancelable:true,composed:true,repeat:type==="keydown"&&localActiveKeys.has(key)
-  });
+  const target=(ctx.doc.activeElement&&ctx.doc.activeElement!==ctx.doc.body)
+    ?ctx.doc.activeElement:(ctx.doc.querySelector("canvas")||ctx.doc.body||ctx.doc.documentElement);
+  const event=new ctx.win.KeyboardEvent(type,{key:info.key,code:info.code,bubbles:true,cancelable:true,composed:true});
   target.dispatchEvent(event);
 }
 function releaseLocalKeys(){
@@ -823,15 +712,11 @@ function releaseLocalKeys(){
 async function holdLocalKeys(keys,durationMs){
   const ctx=getLocalGameContext();
   const normalized=[...new Set(keys)];
-  try{
+  for(const key of normalized){dispatchLocalKey(ctx,key,"keydown");localActiveKeys.add(key);}
+  try{await localSleep(Math.max(50,Math.min(3000,Number(durationMs)||250)));}
+  finally{
     for(const key of normalized){
-      dispatchLocalKey(ctx,key,"keydown");
-      localActiveKeys.add(key);
-    }
-    await localSleep(Math.max(50,Math.min(3000,Number(durationMs)||250)));
-  }finally{
-    for(const key of normalized){
-      try{dispatchLocalKey(ctx,key,"keyup");}catch{}
+      dispatchLocalKey(ctx,key,"keyup");
       localActiveKeys.delete(key);
     }
   }
@@ -847,139 +732,64 @@ async function actCork7(key){
   await holdLocalKeys([key],280);
   try{renderLocalStatus(localReadStatus());}catch{}
 }
-const CORK7_SEED_LIBRARY=[
-  {
-    name:"01 · Right spin + Japan",
-    description:"Beginner baseline: right spin with a Japan grab. Focus on one clean rotation and releasing before landing.",
-    events:[
-      {id:1,atMs:14500,preloadMs:360,keys:["d","e"],durationMs:420},
-      {id:2,atMs:33000,preloadMs:360,keys:["d","e"],durationMs:440},
-      {id:3,atMs:51500,preloadMs:360,keys:["d","e"],durationMs:420},
-      {id:4,atMs:70500,preloadMs:360,keys:["d","e"],durationMs:440}
-    ]
-  },
-  {
-    name:"02 · Left spin + Tail",
-    description:"Mirror the first baseline: left spin and Tail grab, to compare rotation direction and grab scoring.",
-    events:[
-      {id:1,atMs:14500,preloadMs:360,keys:["a","q"],durationMs:420},
-      {id:2,atMs:33000,preloadMs:360,keys:["a","q"],durationMs:440},
-      {id:3,atMs:51500,preloadMs:360,keys:["a","q"],durationMs:420},
-      {id:4,atMs:70500,preloadMs:360,keys:["a","q"],durationMs:440}
-    ]
-  },
-  {
-    name:"03 · Alternating spins + grabs",
-    description:"Introduce variety by alternating direction and the three supported grab inputs.",
-    events:[
-      {id:1,atMs:14500,preloadMs:350,keys:["d","e"],durationMs:390},
-      {id:2,atMs:33000,preloadMs:350,keys:["a","q"],durationMs:410},
-      {id:3,atMs:51500,preloadMs:350,keys:["d","Shift"],durationMs:390},
-      {id:4,atMs:70500,preloadMs:350,keys:["a","e"],durationMs:410}
-    ]
-  },
-  {
-    name:"04 · Bio basics",
-    description:"Test the published spin + frontflip combination together at take-off, then release for landing.",
-    events:[
-      {id:1,atMs:14500,preloadMs:350,keys:["d","w","e"],durationMs:360},
-      {id:2,atMs:33000,preloadMs:350,keys:["a","w","q"],durationMs:380},
-      {id:3,atMs:51500,preloadMs:350,keys:["d","w","Shift"],durationMs:360},
-      {id:4,atMs:70500,preloadMs:350,keys:["a","w","e"],durationMs:380}
-    ]
-  },
-  {
-    name:"05 · Cork basics",
-    description:"Test the published spin + backflip combination together at take-off.",
-    events:[
-      {id:1,atMs:14500,preloadMs:350,keys:["d","s","q"],durationMs:360},
-      {id:2,atMs:33000,preloadMs:350,keys:["a","s","e"],durationMs:380},
-      {id:3,atMs:51500,preloadMs:350,keys:["d","s","Shift"],durationMs:360},
-      {id:4,atMs:70500,preloadMs:350,keys:["a","s","q"],durationMs:380}
-    ]
-  },
-  {
-    name:"06 · Flatspin basics",
-    description:"Compare an air-roll input combined with a spin, keeping one grab and a controlled release.",
-    events:[
-      {id:1,atMs:14500,preloadMs:350,keys:["d","ArrowRight","e"],durationMs:350},
-      {id:2,atMs:33000,preloadMs:350,keys:["a","ArrowLeft","q"],durationMs:370},
-      {id:3,atMs:51500,preloadMs:350,keys:["d","ArrowRight","Shift"],durationMs:350},
-      {id:4,atMs:70500,preloadMs:350,keys:["a","ArrowLeft","e"],durationMs:370}
-    ]
-  },
-  {
-    name:"07 · Rodeo / misty exploration",
-    description:"Explore the up-arrow + spin + flip combination described by Cork7, using short controlled inputs.",
-    events:[
-      {id:1,atMs:14500,preloadMs:350,keys:["d","s","ArrowUp","q"],durationMs:330},
-      {id:2,atMs:33000,preloadMs:350,keys:["a","w","ArrowUp","e"],durationMs:350},
-      {id:3,atMs:51500,preloadMs:350,keys:["d","s","ArrowUp","Shift"],durationMs:330},
-      {id:4,atMs:70500,preloadMs:350,keys:["a","w","ArrowUp","q"],durationMs:350}
-    ]
-  }
-];
 function randomLocalPolicy(){
-  const seed=CORK7_SEED_LIBRARY[Math.floor(Math.random()*CORK7_SEED_LIBRARY.length)];
-  return {...JSON.parse(JSON.stringify(seed)),name:"Exploration · "+seed.name,createdAt:new Date().toISOString()};
+  const takeoffs=[14500,33000,51500,70500];
+  const grabSets=[[],["q"],["e"],["Shift"],["q","e"]];
+  const events=takeoffs.map((base,index)=>{
+    const spin=Math.random()<.5?"a":"d";
+    const flip=Math.random()<.5?"w":"s";
+    const grabs=grabSets[Math.floor(Math.random()*grabSets.length)];
+    const extra=Math.random()<.22?["ArrowUp"]:[];
+    const keys=[...new Set([spin,flip,...grabs,...extra])].slice(0,5);
+    return {id:index+1,atMs:Math.max(7000,base+Math.round((Math.random()-.5)*6000)),preloadMs:280+Math.round(Math.random()*440),keys,durationMs:260+Math.round(Math.random()*620)};
+  });
+  return {events:events.sort((a,b)=>a.atMs-b.atMs),createdAt:new Date().toISOString()};
 }
 function nextLocalPolicy(){
-  if(localTrainer.runsFinished<CORK7_SEED_LIBRARY.length){
-    return {...JSON.parse(JSON.stringify(CORK7_SEED_LIBRARY[localTrainer.runsFinished])),seedIndex:localTrainer.runsFinished+1,createdAt:new Date().toISOString()};
-  }
+  if(!localTrainer.bestPolicy||!Array.isArray(localTrainer.bestPolicy.events)||Math.random()<.22)return randomLocalPolicy();
   const parent=localTrainer.bestPolicy;
-  if(!parent||!Array.isArray(parent.events)||Math.random()<0.14)return randomLocalPolicy();
   const events=parent.events.map((event,index)=>{
-    let keys=(event.keys||[]).slice();
-    const spinAt=keys.findIndex(key=>key==="a"||key==="d");
-    if(spinAt>=0&&Math.random()<0.22)keys[spinAt]=keys[spinAt]==="a"?"d":"a";
-    const flipAt=keys.findIndex(key=>key==="w"||key==="s");
-    if(flipAt>=0&&Math.random()<0.18)keys[flipAt]=keys[flipAt]==="w"?"s":"w";
-    if(Math.random()<0.22){
-      const grabs=["q","e","Shift"];
-      const current=keys.findIndex(key=>grabs.includes(key));
-      if(current>=0)keys[current]=grabs[(grabs.indexOf(keys[current])+1+Math.floor(Math.random()*2))%grabs.length];
-      else keys.push(grabs[Math.floor(Math.random()*grabs.length)]);
+    const keys=(event.keys||[]).slice();
+    if(Math.random()<.3){
+      const at=keys.findIndex(key=>key==="a"||key==="d");
+      if(at>=0)keys[at]=keys[at]==="a"?"d":"a";
     }
-    if(Math.random()<0.12){
-      const rollAt=keys.findIndex(key=>key==="ArrowLeft"||key==="ArrowRight");
-      if(rollAt>=0)keys.splice(rollAt,1);
-      else if(spinAt>=0)keys.push(keys[spinAt]==="a"?"ArrowLeft":"ArrowRight");
+    if(Math.random()<.28){
+      const at=keys.findIndex(key=>key==="w"||key==="s");
+      if(at>=0)keys[at]=keys[at]==="w"?"s":"w";
+      else keys.push(Math.random()<.5?"w":"s");
+    }
+    if(Math.random()<.22){
+      const at=keys.findIndex(key=>key==="q"||key==="e"||key==="Shift");
+      if(at>=0)keys[at]=["q","e","Shift"][Math.floor(Math.random()*3)];
+      else if(keys.length<3)keys.push(["q","e","Shift"][Math.floor(Math.random()*3)]);
     }
     return {
       id:index+1,
-      atMs:Math.max(7000,(Number(event.atMs)||14500)+Math.round((Math.random()-.5)*1800)),
-      preloadMs:Math.max(250,Math.min(800,(Number(event.preloadMs)||360)+Math.round((Math.random()-.5)*150))),
+      atMs:Math.max(7000,(Number(event.atMs)||14500)+Math.round((Math.random()-.5)*4000)),
+      preloadMs:Math.max(220,Math.min(850,(Number(event.preloadMs)||450)+Math.round((Math.random()-.5)*260))),
       keys:[...new Set(keys)].slice(0,5),
-      durationMs:Math.max(260,Math.min(900,(Number(event.durationMs)||420)+Math.round((Math.random()-.5)*180)))
+      durationMs:Math.max(200,Math.min(1050,(Number(event.durationMs)||420)+Math.round((Math.random()-.5)*380)))
     };
   });
-  return {
-    name:"Evolved · "+(parent.name||"best baseline"),
-    description:"A small mutation of the highest-scoring verified policy. Only real results-screen scores determine whether it becomes the new best.",
-    parentName:parent.name||null,
-    events:events.sort((a,b)=>a.atMs-b.atMs),
-    createdAt:new Date().toISOString()
-  };
+  return {events:events.sort((a,b)=>a.atMs-b.atMs),createdAt:new Date().toISOString()};
 }
 async function waitLocalUntil(target){
   while(localTraining&&Date.now()<target)await localSleep(Math.min(250,Math.max(30,target-Date.now())));
 }
 async function runLocalPolicy(policy){
   let status=localReadStatus();
-  if(status.phase!=="game"&&status.phase!=="results")throw new Error("The Cork7 Solo ride is not active. Enter Solo → APEX → Ride Solo first.");
-  $("c7SessionStatus").textContent="Resetting to a consistent start: holding R to restart, then F to skip the gondola…";
-  await holdLocalKeys(["r"],2100);
-  await localSleep(1400);
-  await holdLocalKeys(["f"],220);
-  await localSleep(1800);
-  status=localReadStatus();
-  if(status.phase!=="game")throw new Error("Cork7 did not return to an active ride after restart. No training score was recorded.");
+  if(status.phase==="results"){
+    await holdLocalKeys(["r"],2200);
+    await localSleep(1800);
+    await holdLocalKeys(["f"],250);
+    await localSleep(1200);
+    status=localReadStatus();
+  }
+  if(status.phase!=="game")throw new Error("The Cork7 Solo run is not active yet. Open the game panel, complete Solo → APEX → Ride Solo, and start the actual run before training.");
   const started=Date.now();
-  for(let index=0;index<policy.events.length;index++){
-    const event=policy.events[index];
+  for(const event of policy.events){
     if(!localTraining)return {cancelled:true};
-    $("c7SessionStatus").textContent="Playing "+(policy.name||"strategy")+" · feature action "+(index+1)+" of "+policy.events.length;
     await waitLocalUntil(started+Math.max(0,event.atMs-(event.preloadMs||400)));
     if(!localTraining)return {cancelled:true};
     status=localReadStatus();
@@ -991,24 +801,20 @@ async function runLocalPolicy(policy){
   const deadline=Date.now()+210000;
   status=localReadStatus();
   while(localTraining&&Date.now()<deadline&&status.phase!=="results"){
-    await localSleep(900);
+    await localSleep(1000);
     status=localReadStatus();
   }
   if(!localTraining)return {cancelled:true};
-  if(status.phase!=="results")throw new Error("The browser runner did not detect the Cork7 results screen after 210 seconds. No score was invented or saved. Check the diagnostics below for runtime and HUD signals.");
-  if(status.score==null)throw new Error("Cork7 reached its results screen, but no readable current-run score was found in the page, game runtime or recent-run browser storage. Training is paused rather than learning from a guessed score.");
-  return {score:status.score,scoreSource:status.scoreSource||"game runtime",policy,capturedAt:new Date().toISOString()};
+  if(status.phase!=="results")throw new Error("The browser runner did not detect the Cork7 results screen after 210 seconds. No score has been invented or recorded.");
+  if(status.score==null)throw new Error("Cork7 reached its results screen, but the score is not exposed as readable page text. Training is paused until score capture can be connected.");
+  return {score:status.score,policy,capturedAt:new Date().toISOString()};
 }
 function updateLocalTrainerDisplay(){
   $("c7TrainerStats").textContent=(localTraining?"AI TRAINING ON THIS COMPUTER":"AI STOPPED")+
     " · Generation "+localTrainer.generation+
-    " · Verified runs "+localTrainer.runsFinished+
+    " · Real Cork7 runs "+localTrainer.runsFinished+
     " · Best actual score "+(localTrainer.bestScore==null?"—":localTrainer.bestScore.toLocaleString())+
-    " · Best strategy "+(localTrainer.bestPolicy?.name||"not measured yet")+
     " · Checkpoints saved to Northflank";
-  const strategy=$("c7CurrentStrategy");
-  if(strategy)strategy.textContent=localTraining?"Current strategy: "+(localCurrentPolicy||"preparing")+" · Verified score required before learning":
-    "Next: "+(localTrainer.runsFinished<CORK7_SEED_LIBRARY.length?CORK7_SEED_LIBRARY[localTrainer.runsFinished].name:"mutate the best verified strategy");
   $("c7TrainStart").textContent=localTraining?"Training active":"Start AI trainer";
 }
 async function syncLocalTrainer(){
@@ -1040,9 +846,6 @@ async function startLocalTraining(){
     while(localTraining){
       const policy=nextLocalPolicy();
       try{
-        localCurrentPolicy=policy.name||"seed strategy";
-        updateLocalTrainerDisplay();
-        $("c7SessionStatus").textContent="Testing built-in strategy: "+localCurrentPolicy+". Inputs run in the embedded Cork7 game."; 
         const result=await runLocalPolicy(policy);
         if(result.cancelled)break;
         localTrainer.runsFinished++;
@@ -1055,11 +858,10 @@ async function startLocalTraining(){
           generation:localTrainer.generation,
           score:result.score,
           best:localTrainer.bestScore,
-          policyName:policy.name||"unnamed strategy",
           capturedAt:result.capturedAt
         });
         if(localTrainer.history.length>80)localTrainer.history.shift();
-        localTrainer.generation=1+Math.floor(Math.max(0,localTrainer.runsFinished-CORK7_SEED_LIBRARY.length)/6);
+        localTrainer.generation=1+Math.floor(localTrainer.runsFinished/6);
         $("c7SessionStatus").textContent="Actual Cork7 run "+localTrainer.runsFinished+" completed. Score captured: "+result.score.toLocaleString()+". The next policy is being tested.";
         updateLocalTrainerDisplay();
         await syncLocalTrainer();

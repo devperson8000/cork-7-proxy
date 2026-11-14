@@ -182,6 +182,11 @@ function startCork7Polling(){
 }
 function renderCork7(data){
   const starting=!!data.starting||data.phase==="starting";
+  const resources=data.resourceUsage||{};
+  const memoryLimit=Number(resources.containerMemoryLimitMb);
+  const cpuLimit=Number(resources.cpuLimitCores);
+  const resourceBlocked=!Number.isFinite(memoryLimit)||memoryLimit<1024||
+    (Number.isFinite(cpuLimit)&&cpuLimit<0.25);
   $("c7Phase").textContent=starting?"STARTING":data.connected?String(data.phase||"CONNECTED").toUpperCase():(data.lastError?"START FAILED":"NOT CONNECTED");
   $("c7SessionStatus").textContent=starting
     ?"Chromium is starting and Cork7 is loading. The dashboard will keep checking the worker."
@@ -189,11 +194,13 @@ function renderCork7(data){
       ?"Connected to "+data.site+" · "+data.mode+" · "+data.park
       :data.lastError
         ?"Cork7 launch failed: "+data.lastError
-        :"No active Cork7 browser session is connected.";
+        :resourceBlocked
+          ?"Launch disabled to protect the free-tier worker. It needs at least 1 GB RAM and 0.25 vCPU; the current allocation is shown below."
+          :"No active Cork7 browser session is connected.";
+  $("c7Start").disabled=starting||!!data.connected||resourceBlocked;
   $("c7Details").textContent="Score detected: "+(data.score==null?"not readable yet":Number(data.score).toLocaleString())+" · canvas: "+(data.canvasCount||0)+" · actions: "+(data.actionCount||0)+" · "+(data.lastAction||"");
   const trainer=data.trainer||{};
   $("c7TrainerStats").textContent="AI "+(trainer.training?"TRAINING":"PAUSED")+" · Generation "+(trainer.generation||1)+" · Runs "+(trainer.runsFinished||0)+" · Best Cork7 score "+(trainer.bestScore==null?"—":Number(trainer.bestScore).toLocaleString())+(trainer.coachProfile?" · Coach profile active":" · No player coach profile yet");
-  const resources=data.resourceUsage||{};
   const memoryLine=resources.containerMemoryMb==null
     ?"Container RAM: unavailable"
     :"Container RAM: "+resources.containerMemoryMb+" / "+(resources.containerMemoryLimitMb==null?"unknown":resources.containerMemoryLimitMb)+" MB";
@@ -214,13 +221,13 @@ async function cork7Request(action,method="GET",payload=null){
 async function startCork7(){
   $("c7Start").disabled=true;$("c7SessionStatus").textContent="Starting Chromium and loading cork7.com…";
   try{await cork7Request("start","POST",{park:$("c7Park").value});startCork7Polling();}
-  catch(error){$("c7SessionStatus").textContent="Could not start Cork7: "+error.message;}
-  finally{$("c7Start").disabled=false;}
+  catch(error){$("c7SessionStatus").textContent="Could not start Cork7: "+error.message;$("c7Start").disabled=true;}
+  finally{if(!cork7PollTimer&&$("c7SessionStatus").textContent.startsWith("Starting Chromium"))$("c7Start").disabled=false;}
 }
 async function observeCork7(){
   $("c7Observe").disabled=true;
   try{await cork7Request("snapshot");}
-  catch(error){$("c7SessionStatus").textContent="Observe failed: "+error.message;}
+  catch(error){$("c7SessionStatus").textContent="Observe failed: "+error.message;$("c7Start").disabled=true;}
   finally{$("c7Observe").disabled=false;}
 }
 async function actCork7(key){
@@ -433,6 +440,7 @@ $("c7TrainStart").addEventListener("click",()=>trainCork7("train-start"));
 $("c7TrainPause").addEventListener("click",()=>trainCork7("train-pause"));
 $("c7Stop").addEventListener("click",stopCork7);
 document.querySelectorAll("[data-c7key]").forEach(button=>button.addEventListener("click",()=>actCork7(button.dataset.c7key)));
+observeCork7();
 })();
 </script>
 </body>

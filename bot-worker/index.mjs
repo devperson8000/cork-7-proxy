@@ -431,6 +431,8 @@ const server = http.createServer(async (req, res) => {
       if (action === "start") return json(res, 200, await cork7Agent.start({ park: input.park || "APEX" }));
       if (action === "act") return json(res, 200, await cork7Agent.act({ keys: input.keys, durationMs: input.durationMs }));
       if (action === "restart") return json(res, 200, await cork7Agent.restart());
+      if (action === "train-start") return json(res, 200, await cork7Agent.startTraining());
+      if (action === "train-pause") return json(res, 200, await cork7Agent.pauseTraining());
       if (action === "stop") return json(res, 200, await cork7Agent.close());
       return json(res, 404, { error: "Unknown Cork7 action" });
     } catch (error) {
@@ -468,7 +470,9 @@ const server = http.createServer(async (req, res) => {
       targetVariety: Number(clamp(varietyRate + 0.15, 0.35, 0.9).toFixed(3)),
       updatedAt: new Date().toISOString()
     };
+    cork7Agent.setCoachProfile(coachProfile);
     await saveState();
+    await cork7Agent.saveTrainer().catch(error => console.error("Cork7 coach profile save failed:", error.message));
     return json(res, 200, { ok: true, message: "AI Lab training profile updated.", coachProfile });
   }
 
@@ -497,6 +501,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 await loadState();
+await cork7Agent.restoreTrainer();
 server.listen(PORT, "0.0.0.0", () => {
   console.log("Apex bot worker listening on port " + PORT + "; restored generation " + generation + "; training=" + training);
 });

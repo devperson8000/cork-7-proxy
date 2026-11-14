@@ -1,13 +1,18 @@
-# Apex Lab Cloud Dashboard
+# Apex Lab + Cork7 AI Dashboard
 
-This is the Vercel control UI. It sends Start / Pause / Resume / Reset commands through a Vercel serverless API route. The bearer token is never exposed to browser JavaScript.
+This Vercel dashboard connects to the Northflank worker through `/api/bot/[action]`. The bearer token is never exposed to browser JavaScript.
 
-The AI training loop, neural policy, evolution and checkpoints run in Northflank, independently of the laptop or browser.
+## AI systems
 
-Set these Vercel Production environment variables:
+- **Apex simulator:** independent neural-policy simulation with evolution and persistent checkpoints.
+- **Cork7 Solo agent:** a separate Playwright Chromium session on the worker, using the actual Cork7 website and documented keyboard controls. It evolves timed trick-key policies from the results-screen score when that score is readable.
+- **Replay Coach:** `/coach/` analyses player-provided run data and sends aggregate coaching metrics to the worker.
+
+Cork7 browser sessions are fresh and unsigned. The dashboard exposes Solo session start/stop, screenshot refresh, restart and normal key controls, plus Start/Pause for the score-based trainer. It does not log in, enter multiplayer/ranked modes or submit score records through an account.
+
+## Vercel environment variables
+
 - `APEX_BOT_URL`: public HTTPS base URL of the Northflank `apex-bot-worker` service, without a trailing path.
-- `APEX_BOT_TOKEN`: the same random bearer token as the worker's `BOT_CONTROL_TOKEN`.
+- `APEX_BOT_TOKEN`: same random bearer token as `BOT_CONTROL_TOKEN` on Northflank.
 
-The dashboard proxies requests through `/api/bot/[action]`; only fixed, allowlisted actions are forwarded.
-
-Best-run frames are stored by the worker on the persistent Northflank volume. The browser renders those frames to WebM when the replay is opened.
+Only fixed, allowlisted actions are proxied. Persistent learning data remains on the Northflank volume.

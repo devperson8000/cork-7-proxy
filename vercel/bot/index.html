@@ -193,7 +193,15 @@ function renderCork7(data){
   $("c7Details").textContent="Score detected: "+(data.score==null?"not readable yet":Number(data.score).toLocaleString())+" · canvas: "+(data.canvasCount||0)+" · actions: "+(data.actionCount||0)+" · "+(data.lastAction||"");
   const trainer=data.trainer||{};
   $("c7TrainerStats").textContent="AI "+(trainer.training?"TRAINING":"PAUSED")+" · Generation "+(trainer.generation||1)+" · Runs "+(trainer.runsFinished||0)+" · Best Cork7 score "+(trainer.bestScore==null?"—":Number(trainer.bestScore).toLocaleString())+(trainer.coachProfile?" · Coach profile active":" · No player coach profile yet");
-  $("c7PageText").textContent=(data.lastError?"ERROR: "+data.lastError+"\n\n":"")+(data.pageText||"No visible page text.");
+  const resources=data.resourceUsage||{};
+  const memoryLine=resources.containerMemoryMb==null
+    ?"Container RAM: unavailable"
+    :"Container RAM: "+resources.containerMemoryMb+" / "+(resources.containerMemoryLimitMb==null?"unknown":resources.containerMemoryLimitMb)+" MB";
+  const processLine="Worker RSS: "+(resources.processRssMb==null?"—":resources.processRssMb+" MB")+
+    " · OOM kills: "+(resources.oomKills==null?"—":resources.oomKills)+
+    " · CPU throttled: "+(resources.cpuThrottledSeconds==null?"—":resources.cpuThrottledSeconds+" s");
+  $("c7PageText").textContent=memoryLine+"\n"+processLine+"\n\n"+
+    (data.lastError?"ERROR: "+data.lastError+"\n\n":"")+(data.pageText||"No visible page text.");
   if(data.screenshot){
     $("c7Screen").src="data:image/jpeg;base64,"+data.screenshot;
     $("c7Screen").hidden=false;$("c7ScreenEmpty").hidden=true;$("c7ScreenEmpty").style.display="none";

@@ -1,6 +1,6 @@
 const ALLOWED = new Set(["status", "replay", "start", "pause", "resume", "reset"]);
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store, max-age=0");
   res.setHeader("X-Content-Type-Options", "nosniff");
 
@@ -44,4 +44,4 @@ export default async function handler(req, res) {
   } catch {
     return res.status(502).json({ error: "Could not reach the Northflank worker. Check that its service is running and its public HTTPS port is configured." });
   }
-}
+};

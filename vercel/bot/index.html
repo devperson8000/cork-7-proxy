@@ -20,7 +20,7 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
 .cloud-note{margin-top:14px;padding:13px 15px;border-radius:11px;border:1px solid rgba(166,240,209,.2);background:rgba(166,240,209,.045);color:#bed0cb;font-size:10px;line-height:1.65}.cloud-note b{color:var(--mint)}.error-note{border-color:rgba(255,179,107,.25);background:rgba(255,179,107,.05)}.error-note b{color:#ffd0a5}.footer{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:20px;color:#647a7e;font-size:9px;letter-spacing:.04em}
 @media(max-width:930px){.grid{grid-template-columns:1fr}.side{grid-template-columns:repeat(2,minmax(0,1fr))}.side .panel:last-child{grid-column:1/-1}}
 @media(max-width:620px){.shell{padding:16px 11px 27px}.topbar{align-items:flex-start}.top-right{gap:6px}.pill{font-size:8px;padding:8px 9px}.heading{align-items:flex-start;flex-direction:column}.course{font-size:9px}.side{grid-template-columns:1fr}.side .panel:last-child{grid-column:auto}.canvas-wrap{height:350px}.controls{align-items:flex-start}.btnrow{width:100%}.btnrow .btn{flex:1}.best-actions{flex-wrap:wrap}}
-@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+.realgame{margin:0 0 15px}.realgame-body{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(260px,.7fr);gap:14px;padding:14px 16px}.realgame-screen{width:100%;display:block;aspect-ratio:16/9;object-fit:contain;background:#03090c;border:1px solid var(--line);border-radius:10px}.realgame-tools{display:grid;gap:9px;align-content:start}.realgame-controls{display:flex;gap:6px;flex-wrap:wrap}.realgame-controls .btn{min-width:44px}.realgame-select{min-height:36px;border:1px solid var(--line);border-radius:8px;background:#0a171c;color:var(--text);padding:7px 9px;font-size:10px}.realgame-status{font-size:10px;color:#b8cbc8;line-height:1.55;overflow-wrap:anywhere}.realgame-status pre{white-space:pre-wrap;max-height:160px;overflow:auto;background:#081318;border:1px solid var(--line);border-radius:8px;padding:9px;color:#9fb8b4;font-size:9px}.realgame-dot{color:var(--cyan);font-weight:800}@media(max-width:800px){.realgame-body{grid-template-columns:1fr}}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
@@ -39,6 +39,41 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
     <div class="course">✳ APEX / FREESTYLE LINE</div>
   </div>
 
+  <section class="panel realgame">
+    <div class="panel-head">
+      <div><div class="panel-title">CORK7 / REAL GAME SESSION</div><div class="panel-meta" style="margin-top:4px">PRIVATE SOLO BROWSER · LOCAL RUNS · NO ACCOUNT LOGIN</div></div>
+      <div class="panel-meta" id="c7Phase">NOT CONNECTED</div>
+    </div>
+    <div class="realgame-body">
+      <div>
+        <img id="c7Screen" class="realgame-screen" alt="Live Cork7 browser session will appear here" hidden>
+        <div class="realgame-screen" id="c7ScreenEmpty" style="display:grid;place-items:center;color:var(--muted);font-size:11px">Launch a Solo session to view the actual Cork7 game</div>
+      </div>
+      <div class="realgame-tools">
+        <div class="realgame-status" id="c7SessionStatus">The real-game browser has not been started. This opens a fresh unsigned Solo session on the Northflank worker.</div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">
+          <select id="c7Park" class="realgame-select" aria-label="Cork7 park">
+            <option>APEX</option><option>BIG AIR</option><option>THE YARD</option><option>SHIRAKUMO</option><option>FOREST LINE</option><option>BELLEVUE</option><option>ASPEN PIPE</option>
+          </select>
+          <button class="btn primary" id="c7Start">Launch Solo</button>
+          <button class="btn" id="c7Observe">Refresh view</button>
+          <button class="btn" id="c7Restart">Restart run</button>
+          <button class="btn danger" id="c7Stop">Close session</button>
+        </div>
+        <div class="panel-meta">NORMAL GAME INPUTS / EXPERIMENTAL CONTROL</div>
+        <div class="realgame-controls">
+          <button class="btn" data-c7key="a">A</button><button class="btn" data-c7key="d">D</button>
+          <button class="btn" data-c7key="w">W</button><button class="btn" data-c7key="s">S</button>
+          <button class="btn" data-c7key="Space">SPACE</button><button class="btn" data-c7key="Shift">SHIFT</button>
+          <button class="btn" data-c7key="q">Q</button><button class="btn" data-c7key="e">E</button>
+          <button class="btn" data-c7key="ArrowLeft">←</button><button class="btn" data-c7key="ArrowRight">→</button>
+          <button class="btn" data-c7key="ArrowUp">↑</button><button class="btn" data-c7key="ArrowDown">↓</button>
+        </div>
+        <div class="realgame-status"><span class="realgame-dot">LIVE FEEDBACK</span> <span id="c7Details">Waiting for browser session.</span></div>
+        <div class="realgame-status"><pre id="c7PageText">Cork7 page text / HUD diagnostics will appear here.</pre></div>
+      </div>
+    </div>
+  </section>
   <main class="grid">
     <section class="panel">
       <div class="panel-head"><div><div class="panel-title">REMOTE RIDER VIEW</div><div class="panel-meta" style="margin-top:4px">LIVE SIMULATION TELEMETRY FROM NORTHFLANK</div></div><div class="panel-meta" id="agentLabel">WAITING FOR WORKER</div></div>
@@ -114,9 +149,50 @@ const FEATURES = [
   {type:"jump",z:850,lane:-.08},{type:"rail",z:1010,lane:.34,len:58}
 ];
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-function api(action,method="GET"){
-  return fetch("/api/bot/"+action,{method,headers:method==="POST"?{"Content-Type":"application/json"}:{},cache:"no-store"})
+function api(action,method="GET",payload=null){
+  return fetch("/api/bot/"+action,{method,headers:method==="POST"?{"Content-Type":"application/json"}:{},body:method==="POST"?JSON.stringify(payload||{}):undefined,cache:"no-store"})
     .then(async r=>{const body=await r.json().catch(()=>({error:"Invalid response"}));if(!r.ok)throw new Error(body.error||("Worker returned "+r.status));return body;});
+}
+function renderCork7(data){
+  $("c7Phase").textContent=data.connected?String(data.phase||"CONNECTED").toUpperCase():"NOT CONNECTED";
+  $("c7SessionStatus").textContent=data.connected?"Connected to "+data.site+" · "+data.mode+" · "+data.park:"Cork7 browser session is closed.";
+  $("c7Details").textContent="Score detected: "+(data.score==null?"not readable yet":Number(data.score).toLocaleString())+" · canvas: "+(data.canvasCount||0)+" · actions: "+(data.actionCount||0)+" · "+(data.lastAction||"");
+  $("c7PageText").textContent=(data.lastError?"ERROR: "+data.lastError+"\n\n":"")+(data.pageText||"No visible page text.");
+  if(data.screenshot){
+    $("c7Screen").src="data:image/jpeg;base64,"+data.screenshot;
+    $("c7Screen").hidden=false;$("c7ScreenEmpty").hidden=true;$("c7ScreenEmpty").style.display="none";
+  }
+}
+async function cork7Request(action,method="GET",payload=null){
+  const data=await api("cork7-"+action,method,payload);renderCork7(data);return data;
+}
+async function startCork7(){
+  $("c7Start").disabled=true;$("c7SessionStatus").textContent="Starting Chromium and loading cork7.com…";
+  try{await cork7Request("start","POST",{park:$("c7Park").value});}
+  catch(error){$("c7SessionStatus").textContent="Could not start Cork7: "+error.message;}
+  finally{$("c7Start").disabled=false;}
+}
+async function observeCork7(){
+  $("c7Observe").disabled=true;
+  try{await cork7Request("snapshot");}
+  catch(error){$("c7SessionStatus").textContent="Observe failed: "+error.message;}
+  finally{$("c7Observe").disabled=false;}
+}
+async function actCork7(key){
+  try{await api("cork7-act","POST",{keys:[key],durationMs:280});await cork7Request("snapshot");}
+  catch(error){$("c7SessionStatus").textContent="Input failed: "+error.message;}
+}
+async function restartCork7(){
+  $("c7Restart").disabled=true;
+  try{await cork7Request("restart","POST",{});}
+  catch(error){$("c7SessionStatus").textContent="Restart failed: "+error.message;}
+  finally{$("c7Restart").disabled=false;}
+}
+async function stopCork7(){
+  $("c7Stop").disabled=true;
+  try{await cork7Request("stop","POST",{});$("c7Screen").hidden=true;$("c7ScreenEmpty").hidden=false;$("c7ScreenEmpty").style.display="grid";}
+  catch(error){$("c7SessionStatus").textContent="Close failed: "+error.message;}
+  finally{$("c7Stop").disabled=false;}
 }
 function setConnected(connected,running){
   const pill=$("connectionPill");
@@ -298,6 +374,11 @@ $("resetBtn").addEventListener("click",()=>{if(confirm("Reset the cloud AI's lea
 $("replayBtn").addEventListener("click",loadReplay);
 window.addEventListener("resize",fitCanvas);
 fitCanvas();poll();setInterval(poll,2500);
+$("c7Start").addEventListener("click",startCork7);
+$("c7Observe").addEventListener("click",observeCork7);
+$("c7Restart").addEventListener("click",restartCork7);
+$("c7Stop").addEventListener("click",stopCork7);
+document.querySelectorAll("[data-c7key]").forEach(button=>button.addEventListener("click",()=>actCork7(button.dataset.c7key)));
 })();
 </script>
 </body>

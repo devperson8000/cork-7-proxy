@@ -374,10 +374,15 @@ export class Cork7Agent {
     // Chromium plus a WebGL page. This avoids a predictable OOM restart loop.
     const beforeLaunchResources = await this.resourceMetrics();
     const memoryLimitMb = beforeLaunchResources.containerMemoryLimitMb;
-    if (Number.isFinite(memoryLimitMb) && memoryLimitMb < 384) {
+    const cpuLimitCores = beforeLaunchResources.cpuLimitCores;
+    const memoryTooSmall = Number.isFinite(memoryLimitMb) && memoryLimitMb < 768;
+    const cpuTooSmall = Number.isFinite(cpuLimitCores) && cpuLimitCores < 0.25;
+    if (memoryTooSmall || cpuTooSmall) {
       this.starting = false;
-      this.lastError = "The Northflank container limit is only " + Math.round(memoryLimitMb) +
-        " MB. Chromium + Cork7 WebGL cannot run reliably in that allocation. Keep the free tier, but choose an available Sandbox resource size with at least 1 GB RAM if your remaining free allowance permits it.";
+      this.lastError = "The Northflank container is too small for a safe WebGL launch (" +
+        (Number.isFinite(memoryLimitMb) ? Math.round(memoryLimitMb) + " MB RAM" : "RAM limit unknown") +
+        ", " + (Number.isFinite(cpuLimitCores) ? cpuLimitCores + " vCPU" : "CPU quota unknown") +
+        "). The worker has stopped before starting Chromium to avoid another resource spike. Keep the free tier; use at least 1 GB RAM and 0.25 vCPU only if that fits your remaining free resource allowance.";
       this.lastAction = "Browser launch blocked to prevent an out-of-memory crash";
       return this.status();
     }
@@ -453,11 +458,12 @@ export class Cork7Agent {
       try { return (await fs.readFile(file, "utf8")).trim(); }
       catch { return null; }
     };
-    const [memoryCurrent, memoryLimit, memoryEvents, cpuStat] = await Promise.all([
+    const [memoryCurrent, memoryLimit, memoryEvents, cpuStat, cpuMax] = await Promise.all([
       readTextFile("/sys/fs/cgroup/memory.current"),
       readTextFile("/sys/fs/cgroup/memory.max"),
       readTextFile("/sys/fs/cgroup/memory.events"),
-      readTextFile("/sys/fs/cgroup/cpu.stat")
+      readTextFile("/sys/fs/cgroup/cpu.stat"),
+      readTextFile("/sys/fs/cgroup/cpu.max")
     ]);
     const parseCounter = (source, key) => {
       const line = String(source || "").split(/\r?\n/).find(item => item.startsWith(key + " "));
@@ -473,6 +479,12 @@ export class Cork7Agent {
       processHeapMb: Math.round(usage.heapUsed / 1048576),
       containerMemoryMb: currentBytes == null ? null : Math.round(currentBytes / 1048576),
       containerMemoryLimitMb: limitBytes == null ? null : Math.round(limitBytes / 1048576),
+      cpuLimitCores: (() => {
+        const parts = String(cpuMax || "").split(/\\s+/);
+        const quota = Number(parts[0]), period = Number(parts[1]);
+        return parts[0] && parts[0] !== "max" && quota > 0 && period > 0
+          ? Math.round((quota / period) * 100) / 100 : null;
+      })(),
       oomKills: parseCounter(memoryEvents, "oom_kill"),
       cpuTimeSeconds: Math.round((cpu.user + cpu.system) / 100000) / 10,
       cpuThrottledSeconds: (() => {

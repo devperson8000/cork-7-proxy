@@ -458,12 +458,14 @@ export class Cork7Agent {
       try { return (await fs.readFile(file, "utf8")).trim(); }
       catch { return null; }
     };
-    const [memoryCurrent, memoryLimit, memoryEvents, cpuStat, cpuMax] = await Promise.all([
+    const [memoryCurrentRaw, memoryLimitRaw, memoryEvents, cpuStat, cpuMax, cpuQuotaRaw, cpuPeriodRaw] = await Promise.all([
       readTextFile("/sys/fs/cgroup/memory.current"),
       readTextFile("/sys/fs/cgroup/memory.max"),
       readTextFile("/sys/fs/cgroup/memory.events"),
       readTextFile("/sys/fs/cgroup/cpu.stat"),
-      readTextFile("/sys/fs/cgroup/cpu.max")
+      readTextFile("/sys/fs/cgroup/cpu.max"),
+      readTextFile("/sys/fs/cgroup/cpu/cpu.cfs_quota_us"),
+      readTextFile("/sys/fs/cgroup/cpu/cpu.cfs_period_us")
     ]);
     const parseCounter = (source, key) => {
       const line = String(source || "").split(/\r?\n/).find(item => item.startsWith(key + " "));
@@ -472,28 +474,50 @@ export class Cork7Agent {
     const usage = process.memoryUsage();
     const cpu = process.cpuUsage();
     const numberOrNull = value => value && /^\d+$/.test(value) ? Number(value) : null;
-    const currentBytes = numberOrNull(memoryCurrent);
-    const limitBytes = numberOrNull(memoryLimit);
+
+    // Node 24 exposes container-aware limits even when the cgroup filesystem
+    // is mounted read-only or the platform uses cgroup v1 paths.
+    const constrainedBytes = typeof process.constrainedMemory === "function"
+      ? Number(process.constrainedMemory()) || null : null;
+    const availableBytes = typeof process.availableMemory === "function"
+      ? Number(process.availableMemory()) || null : null;
+    let limitBytes = numberOrNull(memoryLimitRaw);
+    if (limitBytes != null && limitBytes > 1e15) limitBytes = null;
+    limitBytes = limitBytes || constrainedBytes;
+
+    let currentBytes = numberOrNull(memoryCurrentRaw);
+    if (currentBytes == null && limitBytes != null && availableBytes != null) {
+      currentBytes = Math.max(0, limitBytes - availableBytes);
+    }
+
+    let cpuLimitCores = null;
+    const cpuParts = String(cpuMax || "").trim().split(" ").filter(Boolean);
+    if (cpuParts.length >= 2 && cpuParts[0] !== "max") {
+      const quota = Number(cpuParts[0]), period = Number(cpuParts[1]);
+      if (quota > 0 && period > 0) cpuLimitCores = quota / period;
+    } else {
+      const quota = Number(cpuQuotaRaw), period = Number(cpuPeriodRaw);
+      if (quota > 0 && period > 0) cpuLimitCores = quota / period;
+    }
+    if (cpuLimitCores != null) cpuLimitCores = Math.round(cpuLimitCores * 100) / 100;
+
+    const throttledUsec = parseCounter(cpuStat, "throttled_usec");
+    const throttledNsec = parseCounter(cpuStat, "throttled_time");
+    const cpuThrottledSeconds = throttledUsec != null ? throttledUsec / 1e6
+      : throttledNsec != null ? throttledNsec / 1e9 : null;
+
     return {
       processRssMb: Math.round(usage.rss / 1048576),
       processHeapMb: Math.round(usage.heapUsed / 1048576),
       containerMemoryMb: currentBytes == null ? null : Math.round(currentBytes / 1048576),
       containerMemoryLimitMb: limitBytes == null ? null : Math.round(limitBytes / 1048576),
-      cpuLimitCores: (() => {
-        const parts = String(cpuMax || "").trim().split(" ").filter(Boolean);
-        const quota = Number(parts[0]), period = Number(parts[1]);
-        return parts[0] && parts[0] !== "max" && quota > 0 && period > 0
-          ? Math.round((quota / period) * 100) / 100 : null;
-      })(),
+      memoryAvailableMb: availableBytes == null ? null : Math.round(availableBytes / 1048576),
+      cpuLimitCores,
       oomKills: parseCounter(memoryEvents, "oom_kill"),
       cpuTimeSeconds: Math.round((cpu.user + cpu.system) / 100000) / 10,
-      cpuThrottledSeconds: (() => {
-        const micros = parseCounter(cpuStat, "throttled_usec");
-        return micros == null ? null : Math.round(micros / 100000) / 10;
-      })()
+      cpuThrottledSeconds: cpuThrottledSeconds == null ? null : Math.round(cpuThrottledSeconds * 10) / 10
     };
   }
-
   async status({ screenshot = false } = {}) {
     const text = await this.readText();
     const canvasCount = this.page && !this.page.isClosed()

@@ -223,7 +223,8 @@ function render(data){
   else{$("bestRunScore").textContent="—";$("bestRunLandings").textContent="Awaiting a best run";$("bestGeneration").textContent="NO RUN SAVED";}
   $("saveStatus").textContent=data.lastCheckpoint?"Cloud checkpoint · "+new Date(data.lastCheckpoint).toLocaleTimeString():"Cloud worker online · waiting for first checkpoint";
   $("cloudNote").classList.remove("error-note");
-  $("cloudNote").innerHTML="<b>Cloud mode:</b> Northflank worker is "+(data.training?"training now":"connected and paused")+". "+(data.training?"You can close your laptop; the server-side training loop continues.":"Press Start or Resume to continue learning.")+" Progress is checkpointed to the Northflank volume.";
+  const coach=data.coachProfile;const coachNote=coach?"<br><b>Coach input:</b> "+safeText(coach.park)+" profile active · target clean landings "+Math.round(coach.targetCleanLandingRate*100)+"% · target variety "+Math.round(coach.targetVariety*100)+"%. Updated "+new Date(coach.updatedAt).toLocaleTimeString()+".":"<br><b>Coach input:</b> no player feedback profile yet — send one from Replay Coach.";
+  $("cloudNote").innerHTML="<b>Cloud mode:</b> Northflank worker is "+(data.training?"training now":"connected and paused")+". "+(data.training?"You can close your laptop; the server-side training loop continues.":"Press Start or Resume to continue learning.")+" Progress is checkpointed to the Northflank volume."+coachNote;
   drawChart(hist);drawScene(s);
 }
 async function poll(){

@@ -22,7 +22,7 @@ Northflank's Developer/Sandbox project allowance has changed across documentatio
 4. Branch: `feature/cork7-northflank-backend`.
 5. Build type: **Dockerfile**.
 6. Dockerfile path: `/bot-worker/Dockerfile`.
-7. Build context: repository root (`/`).
+7. Build context: repository root (`/`). The Dockerfile copies `bot-worker/package.json` and `bot-worker/index.mjs` relative to this context.
 8. Runtime command: leave the Dockerfile default (`node index.mjs`).
 9. Create the service.
 

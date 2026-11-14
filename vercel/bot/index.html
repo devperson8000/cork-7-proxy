@@ -41,20 +41,18 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
 
   <section class="panel realgame">
     <div class="panel-head">
-      <div><div class="panel-title">CORK7 / REAL GAME SESSION</div><div class="panel-meta" style="margin-top:4px">PRIVATE SOLO BROWSER · LOCAL RUNS · NO ACCOUNT LOGIN</div></div>
+      <div><div class="panel-title">CORK7 / REAL GAME SESSION</div><div class="panel-meta" style="margin-top:4px">APEX / SOLO BROWSER · LOCAL RUNS · NO ACCOUNT LOGIN</div></div>
       <div class="panel-meta" id="c7Phase">NOT CONNECTED</div>
     </div>
     <div class="realgame-body">
       <div>
         <img id="c7Screen" class="realgame-screen" alt="Live Cork7 browser session will appear here" hidden>
-        <div class="realgame-screen" id="c7ScreenEmpty" style="display:grid;place-items:center;color:var(--muted);font-size:11px">Launch a Solo session to view the actual Cork7 game</div>
+        <div class="realgame-screen" id="c7ScreenEmpty" style="display:grid;place-items:center;color:var(--muted);font-size:11px">Launch an APEX Solo session to view the actual Cork7 game</div>
       </div>
       <div class="realgame-tools">
         <div class="realgame-status" id="c7SessionStatus">The real-game browser has not been started. This opens a fresh unsigned Solo session on the Northflank worker.</div>
         <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">
-          <select id="c7Park" class="realgame-select" aria-label="Cork7 park">
-            <option>APEX</option><option>BIG AIR</option><option>THE YARD</option><option>SHIRAKUMO</option><option>FOREST LINE</option><option>BELLEVUE</option><option>ASPEN PIPE</option>
-          </select>
+          <select id="c7Park" class="realgame-select" aria-label="Cork7 park"><option>APEX</option></select>
           <button class="btn primary" id="c7Start">Launch Solo</button>
           <button class="btn" id="c7Observe">Refresh view</button>
           <button class="btn" id="c7Restart">Restart run</button>

@@ -460,12 +460,12 @@ export class Cork7Agent {
       readTextFile("/sys/fs/cgroup/cpu.stat")
     ]);
     const parseCounter = (source, key) => {
-      const line = String(source || "").split("\\n").find(item => item.startsWith(key + " "));
-      return line ? Number(line.split(/\\s+/)[1]) : null;
+      const line = String(source || "").split(/\r?\n/).find(item => item.startsWith(key + " "));
+      return line ? Number(line.split(/\s+/)[1]) : null;
     };
     const usage = process.memoryUsage();
     const cpu = process.cpuUsage();
-    const numberOrNull = value => value && /^\\d+$/.test(value) ? Number(value) : null;
+    const numberOrNull = value => value && /^\d+$/.test(value) ? Number(value) : null;
     const currentBytes = numberOrNull(memoryCurrent);
     const limitBytes = numberOrNull(memoryLimit);
     return {

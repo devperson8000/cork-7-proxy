@@ -1,4 +1,4 @@
-const ALLOWED = new Set(["status", "replay", "start", "pause", "resume", "reset", "coach"]);
+const ALLOWED = new Set(["status", "replay", "start", "pause", "resume", "reset", "coach", "cork7-status", "cork7-snapshot", "cork7-start", "cork7-act", "cork7-restart", "cork7-stop"]);
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store, max-age=0");
@@ -19,12 +19,15 @@ export default async function handler(req, res) {
   try {
     const parsed = new URL(base);
     if (parsed.protocol !== "https:") throw new Error("HTTPS required");
-    target = new URL("/api/" + action, parsed.origin);
+    const isCork7 = action.startsWith("cork7-");
+    const suffix = isCork7 ? action.slice("cork7-".length) : action;
+    target = new URL(isCork7 ? "/api/cork7/" + (suffix === "snapshot" ? "status" : suffix) : "/api/" + suffix, parsed.origin);
+    if (action === "cork7-snapshot") target.searchParams.set("screenshot", "1");
   } catch {
     return res.status(500).json({ error: "APEX_BOT_URL must be a valid HTTPS Northflank service URL." });
   }
 
-  const expectedMethod = (action === "status" || action === "replay") ? "GET" : "POST";
+  const expectedMethod = (action === "status" || action === "replay" || action === "cork7-status" || action === "cork7-snapshot") ? "GET" : "POST";
   if (req.method !== expectedMethod) {
     res.setHeader("Allow", expectedMethod);
     return res.status(405).json({ error: "Method not allowed." });

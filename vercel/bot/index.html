@@ -208,7 +208,8 @@ function renderCork7(data){
     " · CPU quota: "+(resources.cpuLimitCores==null?"—":resources.cpuLimitCores+" vCPU")+
     " · OOM kills: "+(resources.oomKills==null?"—":resources.oomKills)+
     " · CPU throttled: "+(resources.cpuThrottledSeconds==null?"—":resources.cpuThrottledSeconds+" s");
-  $("c7PageText").textContent=memoryLine+"\n"+processLine+"\n\n"+
+  const buildLine="Worker build: "+(data.workerBuild||"version not reported");
+  $("c7PageText").textContent=buildLine+"\n"+memoryLine+"\n"+processLine+"\n\n"+
     (data.lastError?"ERROR: "+data.lastError+"\n\n":"")+(data.pageText||"No visible page text.");
   if(data.screenshot){
     $("c7Screen").src="data:image/jpeg;base64,"+data.screenshot;

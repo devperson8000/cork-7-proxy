@@ -34,8 +34,8 @@ function detectPhase(text, canvasCount) {
   const value = String(text || "").toLowerCase();
   if (/watch replay|save replay|run complete|run finished|ride again|total score/.test(value)) return "results";
   if (/choose a park|pick a park|ride solo|select park/.test(value)) return "park-select";
+  if (/solo\\s+picked|multiplayer|basecamp|locker|sign in|checking account/.test(value)) return "lobby";
   if (canvasCount > 0) return "game";
-  if (/solo|multiplayer|basecamp|locker/.test(value)) return "lobby";
   return "loading";
 }
 
@@ -152,6 +152,8 @@ export class Cork7Agent {
 
   async startTraining() {
     if (!this.page || this.page.isClosed()) throw new Error("Launch a Cork7 Solo session before starting the trainer.");
+    const current = await this.status();
+    if (current.phase !== "game") throw new Error("The Cork7 Solo run is not ready yet. Launch a park and reach the actual run before starting the trainer.");
     if (this.training) return this.trainerStatus();
     this.training = true;
     this.lastError = null;
@@ -342,13 +344,13 @@ export class Cork7Agent {
       }
 
       await this.page.waitForTimeout(12000);
-      const canvasCount = await this.page.locator("canvas").count().catch(() => 0);
-      if (canvasCount > 0) {
+      const afterNavigation = await this.status();
+      if (afterNavigation.phase === "game") {
         await this.page.keyboard.press("f").catch(() => {});
         await this.page.waitForTimeout(1500);
         this.lastAction = "Solo game loaded; F sent to skip the gondola";
       } else {
-        this.lastAction = "Cork7 opened; waiting for the park/game view";
+        this.lastAction = "Cork7 opened; the Solo park view is not confirmed yet";
       }
       return await this.status({ screenshot: true });
     } catch (error) {

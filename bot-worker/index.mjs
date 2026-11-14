@@ -151,8 +151,8 @@ function advance(s, genome) {
       s.score += aligned ? 18 : -10;
       s.cleared[f.id] = true;
     }
-    if (f.type === "rail" && s.z >= f.z && s.z < f.z + f.len) {
-      if (!s.triggered[f.id]) {
+    if (f.type === "rail") {
+      if (!s.triggered[f.id] && s.z >= f.z) {
         s.triggered[f.id] = true;
         if (Math.abs(s.x - f.lane) < 0.42) {
           s.rail = true; s.railId = f.id; s.railSamples = 0; s.railGood = 0;
@@ -161,20 +161,21 @@ function advance(s, genome) {
           s.missed++; s.score -= 16; s.lastTrick = "Rail missed";
         }
       }
-      if (s.rail && s.railId === f.id) {
+      if (s.rail && s.railId === f.id && s.z < f.z + f.len) {
         s.railSamples++;
         s.railGood += clamp(1 - Math.abs(s.x - f.lane), 0, 1) * (1 - Math.abs(balance) * 0.18);
         s.vx += (f.lane - s.x) * 0.18 * dt;
         s.x += (f.lane - s.x) * 0.09 * dt;
       }
-    }
-    if (f.type === "rail" && s.rail && s.railId === f.id && s.z >= f.z + f.len) {
-      const quality = s.railSamples ? s.railGood / s.railSamples : 0;
-      registerTrick(s, "Rail " + (quality > 0.78 ? "locked" : "slide"), 105 + quality * 125);
-      s.rails++; s.rail = false; s.railId = null; s.cleared[f.id] = true;
-    }
-    if (f.type === "rail" && !s.cleared[f.id] && s.z >= f.z + f.len) {
-      s.cleared[f.id] = true; s.missed++;
+      if (s.rail && s.railId === f.id && s.z >= f.z + f.len) {
+        const quality = s.railSamples ? s.railGood / s.railSamples : 0;
+        registerTrick(s, "Rail " + (quality > 0.78 ? "locked" : "slide"), 105 + quality * 125);
+        s.rails++; s.rail = false; s.railId = null; s.cleared[f.id] = true;
+      }
+      if (!s.cleared[f.id] && s.z >= f.z + f.len) {
+        s.cleared[f.id] = true;
+        if (!s.triggered[f.id] || s.railId !== f.id) s.missed++;
+      }
     }
   }
 

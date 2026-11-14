@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 const GAME_URL = "https://cork7.com/";
+const WORKER_BUILD = "cork7-free-tier-guard-2026-11-15";
 const PARKS = new Set(["APEX"]);
 const KEY_ALIASES = new Map([
   ["SPACE", "Space"], [" ", "Space"], ["LEFT", "ArrowLeft"], ["RIGHT", "ArrowRight"],
@@ -524,6 +525,7 @@ export class Cork7Agent {
       ? await this.page.locator("canvas").count().catch(() => 0) : 0;
     const phase = this.starting ? "starting" : detectPhase(text, canvasCount);
     const data = {
+      workerBuild: WORKER_BUILD,
       connected: !!(this.page && !this.page.isClosed()),
       starting: this.starting,
       site: "cork7.com",

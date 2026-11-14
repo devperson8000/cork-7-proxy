@@ -427,7 +427,7 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, await cork7Agent.status({ screenshot: url.searchParams.get("screenshot") === "1" }));
       }
       if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });
-      const input = await readJsonBody(req, 8000);
+      const input = await readJsonBody(req, action === "client-training" ? 20000 : 8000);
       if (action === "client-training") {
         return json(res, 200, { trainer: await cork7Agent.syncBrowserTrainer(input) });
       }

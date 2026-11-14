@@ -1,4 +1,4 @@
-const ALLOWED = new Set(["status", "replay", "start", "pause", "resume", "reset"]);
+const ALLOWED = new Set(["status", "replay", "start", "pause", "resume", "reset", "coach"]);
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store, max-age=0");
@@ -33,7 +33,12 @@ export default async function handler(req, res) {
   try {
     const upstream = await fetch(target, {
       method: expectedMethod,
-      headers: { Authorization: "Bearer " + token, Accept: "application/json" },
+      headers: {
+        Authorization: "Bearer " + token,
+        Accept: "application/json",
+        ...(expectedMethod === "POST" ? { "Content-Type": "application/json" } : {})
+      },
+      body: expectedMethod === "POST" ? JSON.stringify(req.body || {}) : undefined,
       signal: AbortSignal.timeout(8000),
       cache: "no-store"
     });

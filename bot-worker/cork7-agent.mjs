@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 const GAME_URL = "https://cork7.com/";
-const WORKER_BUILD = "cork7-free-tier-guard-2026-11-15";
+const WORKER_BUILD = "cork7-local-browser-trainer-2026-11-15";
 const PARKS = new Set(["APEX"]);
 const KEY_ALIASES = new Map([
   ["SPACE", "Space"], [" ", "Space"], ["LEFT", "ArrowLeft"], ["RIGHT", "ArrowRight"],

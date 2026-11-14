@@ -67,7 +67,7 @@
         <div class="scoreline"><div><span>TECHNIQUE INDEX</span><br><strong id="index">—</strong></div><span id="indexCaption">NOT AN OFFICIAL GAME SCORE</span></div>
         <div class="meter"><i id="meterFill"></i></div>
         <div class="recommendations" id="recommendations"><div class="empty">Enter the run statistics and select “Analyse this run” to receive technique feedback.</div></div>
-        <div class="actions"><button class="btn" id="copyReport">Copy coaching report</button></div>
+        <div class="actions"><button class="btn" id="copyReport">Copy coaching report</button><button class="btn primary" id="teachBotBtn">Teach AI Lab from this run</button></div><div class="muted-note" id="teachStatus">Analyse a run, then send its summary to tune the AI Lab simulator's training priorities.</div>
       </div>
     </section>
     <div class="disclaimer"><b>How the coach works:</b> it evaluates the statistics and replay events you provide. It does not control Cork7, alter the game or submit runs. Video is previewed locally; this page does not upload it to a server.</div>
@@ -120,10 +120,22 @@ function runAnalysis(){const d=getData();const a=analyse(d);renderReport(a);retu
 function renderHistory(){const el=$("history");$("historyCount").textContent=runs.length+" SAVED RUN"+(runs.length===1?"":"S");if(!runs.length){el.innerHTML='<div class="empty">Saved analyses will appear here. They stay in this browser unless you export them.</div>';return}el.innerHTML=runs.slice(0,20).map((r,i)=>'<div class="run"><div><b>'+safe(r.runName)+'</b><small>'+safe(r.park)+' · '+safe(new Date(r.analysis?.createdAt||r.createdAt||Date.now()).toLocaleDateString())+' · '+Number(r.score||0).toLocaleString()+' points</small></div><strong>'+(r.analysis?.index??"—")+'</strong><button class="btn" data-load="'+i+'">View</button></div>').join("");el.querySelectorAll("[data-load]").forEach(b=>b.addEventListener("click",()=>{const r=runs[Number(b.dataset.load)];fields.forEach(k=>{if($(k)&&r[k]!=null)$(k).value=r[k]});events=Array.isArray(r.events)?r.events.slice():[];renderMarkers();if(r.analysis)renderReport(r.analysis);window.scrollTo({top:0,behavior:"smooth"})}))}
 function download(name,data){const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 function saveRun(){const r=runAnalysis();r.createdAt=new Date().toISOString();runs.unshift(r);runs=runs.slice(0,100);persist();renderHistory()}
+async function teachBot(){
+const d=getData(),a=analyse(d),button=$("teachBotBtn"),status=$("teachStatus");
+renderReport(a);button.disabled=true;button.textContent="Sending coach profile…";status.textContent="Sending the run summary to the cloud AI Lab.";
+try{
+const response=await fetch("/api/bot/coach",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({park:d.park,techniqueIndex:a.index,metrics:{totalLandings:d.totalLandings,cleanLandings:d.cleanLandings,crashes:d.crashes,tricks:d.tricks,uniqueTricks:d.uniqueTricks,repeatTricks:d.repeatTricks}}),cache:"no-store"});
+const body=await response.json().catch(()=>({error:"Invalid worker response"}));
+if(!response.ok)throw new Error(body.error||("AI Lab returned "+response.status));
+status.textContent="AI Lab training priorities updated · "+new Date(body.coachProfile.updatedAt).toLocaleTimeString()+". The next simulator training runs will use this profile.";
+button.textContent="Coach profile sent ✓";
+}catch(error){status.textContent="Could not teach the AI Lab: "+error.message+". Check that the Northflank worker is online.";button.textContent="Retry coach update";}
+finally{button.disabled=false;}
+}
 function importObject(o){const d=o.run||o;if(!d||typeof d!=="object")throw new Error("JSON must contain a run object.");fields.forEach(k=>{if($(k)&&d[k]!=null)$(k).value=d[k]});events=Array.isArray(d.events)?d.events:[];renderMarkers();runAnalysis()}
 $("videoFile").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];if(!f)return;if(videoUrl)URL.revokeObjectURL(videoUrl);videoUrl=URL.createObjectURL(f);$("preview").src=videoUrl;$("preview").hidden=false;$("videoName").textContent=f.name+" · "+(f.size/1048576).toFixed(1)+" MB · previewed locally";events=[];renderMarkers()});
 [["markJump","Jump"],["markGrab","Grab"],["markRail","Rail"],["markLanding","Landing"],["markCrash","Crash"]].forEach(([id,type])=>$(id).addEventListener("click",()=>addEvent(type)));
-$("analyse").addEventListener("click",runAnalysis);$("saveRun").addEventListener("click",saveRun);
+$("analyse").addEventListener("click",runAnalysis);$("saveRun").addEventListener("click",saveRun);$("teachBotBtn").addEventListener("click",teachBot);
 $("export").addEventListener("click",()=>download("cork7-run-analysis.json",runAnalysis()));
 $("template").addEventListener("click",()=>download("cork7-run-template.json",{runName:"Apex practice run",park:"APEX",score:0,duration:0,maxSpeed:0,airtime:0,totalLandings:0,cleanLandings:0,crashes:0,tricks:0,uniqueTricks:0,repeatTricks:0,grabSeconds:0,railSeconds:0,notes:"",events:[]}));
 $("exportAll").addEventListener("click",()=>download("cork7-coach-progress.json",{version:1,exportedAt:new Date().toISOString(),runs:runs}));

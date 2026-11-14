@@ -195,7 +195,7 @@ function renderCork7(data){
       :data.lastError
         ?"Cork7 launch failed: "+data.lastError
         :resourceBlocked
-          ?"Launch disabled to protect the free-tier worker. It needs at least 1 GB RAM and 0.25 vCPU; the current allocation is shown below."
+          ?"Launch safely blocked. Free-tier candidate: nf-compute-50 (0.5 shared vCPU / 1 GB RAM, listed at US$12/month). Only change to it when Northflank Billing → Usage confirms every service stays within the Sandbox's US$20/month allowance. Do not upgrade or add payment details."
           :"No active Cork7 browser session is connected.";
   $("c7Start").disabled=starting||!!data.connected||resourceBlocked;
   $("c7Details").textContent="Score detected: "+(data.score==null?"not readable yet":Number(data.score).toLocaleString())+" · canvas: "+(data.canvasCount||0)+" · actions: "+(data.actionCount||0)+" · "+(data.lastAction||"");

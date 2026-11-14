@@ -8,5 +8,8 @@
   },
   "scripts": {
     "start": "node index.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.65.0"
   }
 }

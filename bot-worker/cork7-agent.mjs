@@ -109,6 +109,35 @@ export class Cork7Agent {
     return this.trainerStatus();
   }
 
+  async syncBrowserTrainer(input = {}) {
+    if (this.page && !this.page.isClosed()) {
+      throw new Error("Local browser training cannot sync while the Northflank browser session is active.");
+    }
+    this.training = input.training === true;
+    this.trainer.generation = Math.max(1, Math.min(1000000, Math.floor(Number(input.generation) || 1)));
+    this.trainer.runsFinished = Math.max(0, Math.min(100000000, Math.floor(Number(input.runsFinished) || 0)));
+    const score = Number(input.bestScore);
+    this.trainer.bestScore = Number.isFinite(score) && score >= 0 ? Math.min(100000000, Math.floor(score)) : null;
+    this.trainer.bestPolicy = input.bestPolicy && typeof input.bestPolicy === "object"
+      ? JSON.parse(JSON.stringify(input.bestPolicy)).events?.length <= 24
+        ? input.bestPolicy : null
+      : null;
+    this.trainer.history = Array.isArray(input.history)
+      ? input.history.slice(-80).map(item => ({
+          run: Math.max(0, Math.floor(Number(item.run) || 0)),
+          generation: Math.max(1, Math.floor(Number(item.generation) || 1)),
+          score: Math.max(0, Math.floor(Number(item.score) || 0)),
+          best: Math.max(0, Math.floor(Number(item.best) || 0)),
+          capturedAt: String(item.capturedAt || new Date().toISOString()).slice(0, 40)
+        }))
+      : [];
+    await this.saveTrainer();
+    this.lastAction = this.training
+      ? "Browser-based Cork7 training is active on the owner's computer"
+      : "Browser-based Cork7 training is stopped";
+    return this.trainerStatus();
+  }
+
   randomPolicy() {
     const takeoffTimes = [14500, 33000, 51500, 70500];
     const events = takeoffTimes.map((base, index) => {

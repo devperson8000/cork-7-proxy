@@ -27,7 +27,7 @@ function isOwnerRequest(req) {
   const dot = value.indexOf(".");
   if (dot < 1) return false;
   const expiry = value.slice(0, dot), signature = value.slice(dot + 1);
-  if (!/^\\d{10,13}$/.test(expiry) || Number(expiry) < Math.floor(Date.now() / 1000)) return false;
+  if (!/^\d{10,13}$/.test(expiry) || Number(expiry) < Math.floor(Date.now() / 1000)) return false;
   return safeEqual(signature, ownerSignature(expiry));
 }
 function ownerJson(res, status, body) {

@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#071014"><meta name="color-scheme" content="dark">
+<title>Cork7 Coach — Replay Lab</title>
+<style>
+:root{color-scheme:dark;--bg:#071014;--panel:#0d1a20;--panel2:#12242a;--line:rgba(180,215,211,.14);--muted:#82999b;--text:#eaf3f1;--mint:#a6f0d1;--cyan:#70d9dc;--lime:#d3f36b;--orange:#ffbd7d;--red:#ff8d8d;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 45% -15%,rgba(74,137,126,.2),transparent 48%),#071014;color:var(--text);font-size:14px}button,input,select,textarea{font:inherit}.shell{max-width:1420px;margin:auto;padding:25px 26px 42px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:34px}.brand{display:flex;align-items:center;gap:12px}.mark{width:43px;height:43px;border:1px solid rgba(166,240,209,.4);border-radius:14px;background:rgba(166,240,209,.1);display:grid;place-items:center;color:var(--mint);font-weight:950;letter-spacing:-.1em}.brand small{display:block;color:var(--muted);font-size:9px;letter-spacing:.16em;margin-top:4px}.brand b{font-size:12px;letter-spacing:.14em}.nav{display:flex;gap:8px;flex-wrap:wrap}.link,.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:9px 13px;border:1px solid var(--line);border-radius:9px;background:#12242a;color:#dce9e7;text-decoration:none;font-size:10px;font-weight:800;letter-spacing:.04em;cursor:pointer}.link:hover,.btn:hover{border-color:rgba(166,240,209,.48);background:#183138}.btn.primary{background:var(--mint);color:#081510;border-color:var(--mint)}.btn.primary:hover{background:#c8ffe5}.btn:disabled{opacity:.4;cursor:not-allowed}.intro{margin-bottom:22px}.eyebrow{color:var(--mint);font-size:10px;font-weight:850;letter-spacing:.2em}.intro h1{font-size:clamp(32px,5vw,52px);letter-spacing:-.07em;line-height:1;margin:10px 0}.intro p{max-width:780px;color:#9aafb0;font-size:13px;line-height:1.7;margin:0}.grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(330px,.85fr);gap:15px;align-items:start}.stack{display:grid;gap:14px}.panel{border:1px solid var(--line);border-radius:15px;background:linear-gradient(145deg,rgba(15,30,36,.97),rgba(9,19,24,.97));overflow:hidden;box-shadow:0 18px 55px rgba(0,0,0,.13)}.head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:15px 17px;border-bottom:1px solid var(--line)}.head b{font-size:10px;letter-spacing:.14em}.head span{font-size:9px;color:var(--muted);letter-spacing:.08em}.pad{padding:15px 17px}.drop{min-height:145px;border:1px dashed rgba(166,240,209,.35);border-radius:12px;display:grid;place-items:center;text-align:center;padding:18px;background:rgba(166,240,209,.035)}.drop strong{display:block;font-size:12px}.drop p{font-size:10px;line-height:1.5;color:var(--muted);margin:7px 0 12px}.drop input{max-width:100%;font-size:10px;color:var(--muted)}video{width:100%;max-height:430px;aspect-ratio:16/9;object-fit:contain;background:#03090c;border:1px solid var(--line);border-radius:10px;margin-top:12px}.filehint{color:var(--muted);font-size:9px;margin-top:8px;overflow-wrap:anywhere}.markerbar{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.marker{font-size:9px;padding:6px 8px;border-radius:7px;background:#13262b;border:1px solid var(--line);color:#c4d6d2}.fieldgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.field{display:grid;gap:6px}.field label{font-size:9px;font-weight:800;letter-spacing:.1em;color:#9db2b1}.field input,.field select,.field textarea{width:100%;min-height:39px;border:1px solid rgba(178,211,207,.17);border-radius:8px;padding:9px 10px;background:#091419;color:var(--text);outline:none;font-size:12px}.field textarea{resize:vertical;min-height:75px}.field input:focus,.field select:focus,.field textarea:focus{border-color:rgba(166,240,209,.65);box-shadow:0 0 0 2px rgba(166,240,209,.08)}.field.full{grid-column:1/-1}.muted-note{font-size:9px;color:var(--muted);line-height:1.6;margin-top:10px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.actions .btn{flex:1}.report{padding:15px 17px}.scoreline{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}.scoreline strong{font-size:43px;letter-spacing:-.07em;line-height:1;color:var(--mint)}.scoreline span{color:var(--muted);font-size:9px;letter-spacing:.1em}.meter{height:7px;border-radius:99px;background:#1b3035;overflow:hidden;margin:13px 0 15px}.meter i{display:block;width:0;height:100%;background:linear-gradient(90deg,var(--cyan),var(--mint),var(--lime));border-radius:99px;transition:width .25s}.recommendations{display:grid;gap:8px}.rec{padding:10px 11px;border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.018)}.rec b{display:block;font-size:10px}.rec p{font-size:10px;line-height:1.55;color:#9aafb0;margin:4px 0 0}.rec.priority{border-color:rgba(255,189,125,.27)}.rec.priority b{color:var(--orange)}.empty{font-size:10px;line-height:1.6;color:var(--muted);padding:8px 1px}.history{display:grid;gap:8px}.run{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px;border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.018)}.run b{font-size:10px}.run small{display:block;color:var(--muted);font-size:9px;margin-top:4px}.run strong{font-size:18px;color:var(--mint)}.disclaimer{padding:12px 14px;border:1px solid rgba(112,217,220,.18);border-radius:10px;background:rgba(112,217,220,.04);color:#b7cbca;font-size:10px;line-height:1.65}.disclaimer b{color:var(--cyan)}.foot{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:22px;color:#637a7e;font-size:9px;letter-spacing:.06em}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}@media(max-width:580px){.shell{padding:16px 11px 28px}.top{align-items:flex-start}.nav{justify-content:flex-end}.fieldgrid{grid-template-columns:1fr}.field.full{grid-column:auto}.actions{flex-direction:column}.scoreline strong{font-size:36px}}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="shell">
+<header class="top">
+  <div class="brand"><div class="mark">C7</div><div><b>REPLAY COACH</b><small>TECHNIQUE REVIEW / PRACTICE LAB</small></div></div>
+  <nav class="nav"><a class="link" href="/bot/">Open AI Lab ↗</a><a class="link" href="/c7/">Open Cork7 ↗</a></nav>
+</header>
+<section class="intro"><div class="eyebrow">YOUR RUNS / YOUR TECHNIQUE / YOUR PROGRESS</div><h1>Ride. Review. Improve.</h1><p>Review a Cork7 clip, log the run statistics and get focused technique feedback. The coach tracks landing consistency, trick variety, grab timing and rail time across your saved sessions.</p></section>
+<div class="grid">
+  <main class="stack">
+    <section class="panel">
+      <div class="head"><b>01 / REPLAY REVIEW</b><span>LOCAL VIDEO · NOT UPLOADED</span></div>
+      <div class="pad">
+        <div class="drop"><div><strong>Load a Cork7 replay clip</strong><p>Choose a video exported from the game's replay screen. It stays in this browser tab.</p><input id="videoFile" type="file" accept="video/*"></div></div>
+        <video id="preview" controls playsinline hidden></video>
+        <div class="filehint" id="videoName">No replay loaded.</div>
+        <div class="markerbar" id="markers"><span class="empty">Pause the video and add event markers as you review it.</span></div>
+        <div class="actions">
+          <button class="btn" id="markJump">＋ Jump</button><button class="btn" id="markGrab">＋ Grab</button><button class="btn" id="markRail">＋ Rail</button><button class="btn" id="markLanding">＋ Landing</button><button class="btn" id="markCrash">＋ Crash</button>
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="head"><b>02 / RUN DATA</b><span>ENTER THE RESULTS SCREEN STATS</span></div>
+      <div class="pad">
+        <div class="fieldgrid">
+          <div class="field"><label for="runName">RUN NAME</label><input id="runName" maxlength="48" placeholder="e.g. Apex — clean line"></div>
+          <div class="field"><label for="park">PARK</label><select id="park"><option>APEX</option><option>THE YARD</option><option>SHIRAKUMO</option><option>FOREST LINE</option><option>BIG AIR</option><option>Other</option></select></div>
+          <div class="field"><label for="score">FINAL SCORE</label><input id="score" type="number" min="0" max="10000000" value="0"></div>
+          <div class="field"><label for="duration">RUN DURATION (SECONDS)</label><input id="duration" type="number" min="0" max="3600" step=".1" value="0"></div>
+          <div class="field"><label for="maxSpeed">TOP SPEED (KM/H)</label><input id="maxSpeed" type="number" min="0" max="1000" step=".1" value="0"></div>
+          <div class="field"><label for="airtime">TOTAL AIRTIME (SECONDS)</label><input id="airtime" type="number" min="0" max="3600" step=".1" value="0"></div>
+          <div class="field"><label for="totalLandings">LANDINGS ATTEMPTED</label><input id="totalLandings" type="number" min="0" max="500" value="0"></div>
+          <div class="field"><label for="cleanLandings">CLEAN LANDINGS</label><input id="cleanLandings" type="number" min="0" max="500" value="0"></div>
+          <div class="field"><label for="crashes">CRASHES</label><input id="crashes" type="number" min="0" max="500" value="0"></div>
+          <div class="field"><label for="tricks">AIR TRICKS COMPLETED</label><input id="tricks" type="number" min="0" max="500" value="0"></div>
+          <div class="field"><label for="uniqueTricks">DIFFERENT TRICK TYPES</label><input id="uniqueTricks" type="number" min="0" max="500" value="0"></div>
+          <div class="field"><label for="repeatTricks">REPEATED TRICKS</label><input id="repeatTricks" type="number" min="0" max="500" value="0"></div>
+          <div class="field"><label for="grabSeconds">AVERAGE GRAB HOLD (SECONDS)</label><input id="grabSeconds" type="number" min="0" max="10" step=".05" value="0"></div>
+          <div class="field"><label for="railSeconds">TIME ON RAILS (SECONDS)</label><input id="railSeconds" type="number" min="0" max="3600" step=".1" value="0"></div>
+          <div class="field full"><label for="notes">WHAT DID YOU NOTICE?</label><textarea id="notes" maxlength="800" placeholder="e.g. I landed short after the second kicker, or held the grab too close to the landing."></textarea></div>
+        </div>
+        <div class="muted-note">Use the end-of-run results for the totals. For grab timing and trick variety, estimate from the replay markers if the results screen does not show them. The coach labels these estimates as practice guidance, not an official score calculation.</div>
+        <div class="actions"><button class="btn primary" id="analyse">Analyse this run</button><button class="btn" id="saveRun">Save to progress</button><button class="btn" id="export">Export run data</button><button class="btn" id="template">Download JSON template</button></div>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="head"><b>03 / YOUR PROGRESS</b><span id="historyCount">0 SAVED RUNS</span></div>
+      <div class="pad"><div class="history" id="history"><div class="empty">Saved analyses will appear here. They stay in this browser unless you export them.</div></div><div class="actions"><button class="btn" id="exportAll">Export progress</button><button class="btn" id="importData">Import run JSON</button><input id="jsonFile" type="file" accept=".json,application/json" hidden></div></div>
+    </section>
+  </main>
+  <aside class="stack">
+    <section class="panel">
+      <div class="head"><b>COACH REPORT</b><span id="reportLabel">WAITING FOR RUN DATA</span></div>
+      <div class="report">
+        <div class="scoreline"><div><span>TECHNIQUE INDEX</span><br><strong id="index">—</strong></div><span id="indexCaption">NOT AN OFFICIAL GAME SCORE</span></div>
+        <div class="meter"><i id="meterFill"></i></div>
+        <div class="recommendations" id="recommendations"><div class="empty">Enter the run statistics and select “Analyse this run” to receive technique feedback.</div></div>
+        <div class="actions"><button class="btn" id="copyReport">Copy coaching report</button></div>
+      </div>
+    </section>
+    <div class="disclaimer"><b>How the coach works:</b> it evaluates the statistics and replay events you provide. It does not control Cork7, alter the game or submit runs. Video is previewed locally; this page does not upload it to a server.</div>
+    <div class="disclaimer"><b>AI Lab:</b> the existing autonomous learner continues to train in its separate Apex-style simulator. It does not play Cork7 or affect Cork7 scores. <a href="/bot/" style="color:var(--mint)">Open its dashboard</a>.</div>
+  </aside>
+</div>
+<footer class="foot"><span>CORK7 REPLAY COACH / LOCAL-FIRST PRACTICE TOOL</span><span>REVIEW YOUR REPLAYS · BUILD CONSISTENCY · TRACK PROGRESS</span></footer>
+</div>
+<script>
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const fields=["runName","park","score","duration","maxSpeed","airtime","totalLandings","cleanLandings","crashes","tricks","uniqueTricks","repeatTricks","grabSeconds","railSeconds","notes"];
+const keys=["Jump","Grab","Rail","Landing","Crash"];
+let videoUrl=null,events=[],latestReport="",latestAnalysis=null,runs=loadRuns();
+function loadRuns(){try{const v=JSON.parse(localStorage.getItem("c7-coach-runs")||"[]");return Array.isArray(v)?v:[]}catch(_){return[]}}
+function persist(){try{localStorage.setItem("c7-coach-runs",JSON.stringify(runs.slice(0,100)))}catch(_){alert("Browser storage is full. Export your progress and remove some old runs.")}}
+function safe(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function num(id){const n=Number($(id).value);return Number.isFinite(n)?Math.max(0,n):0}
+function getData(){return{runName:$("runName").value.trim()||"Untitled run",park:$("park").value,score:num("score"),duration:num("duration"),maxSpeed:num("maxSpeed"),airtime:num("airtime"),totalLandings:num("totalLandings"),cleanLandings:num("cleanLandings"),crashes:num("crashes"),tricks:num("tricks"),uniqueTricks:num("uniqueTricks"),repeatTricks:num("repeatTricks"),grabSeconds:num("grabSeconds"),railSeconds:num("railSeconds"),notes:$("notes").value.trim(),events:events.slice(),videoName:$("videoFile").files[0]?.name||""}}
+function addEvent(type){const v=$("preview");const time=v&&!v.hidden?Number(v.currentTime||0):0;events.push({type,time:Number(time.toFixed(2))});events.sort((a,b)=>a.time-b.time);renderMarkers()}
+function renderMarkers(){const el=$("markers");if(!events.length){el.innerHTML='<span class="empty">Pause the video and add event markers as you review it.</span>';return}el.innerHTML=events.map((e,i)=>'<span class="marker">'+safe(e.type)+' · '+e.time.toFixed(2)+'s <button data-remove="'+i+'" title="Remove marker" style="border:0;background:none;color:#ffaaaa;cursor:pointer">×</button></span>').join("");el.querySelectorAll("[data-remove]").forEach(b=>b.addEventListener("click",()=>{events.splice(Number(b.dataset.remove),1);renderMarkers()}))}
+function analyse(d){
+const rec=[];let score=100;
+const landRate=d.totalLandings?Math.min(1,d.cleanLandings/d.totalLandings):null;
+if(d.totalLandings===0){rec.push(["Add landing data","Enter the number of attempted and clean landings. Landing consistency is one of the most useful indicators."]);score-=8}
+else if(landRate<.5){score-=30;rec.push(["priority","Landing consistency needs attention","More than half of the attempts were not clean. Review the final part of each jump and note where you start opening up for landing. Practise making the landing predictable before increasing rotation."])}
+else if(landRate<.8){score-=16;rec.push(["priority","Make landings more repeatable","Your clean-landing rate is "+Math.round(landRate*100)+"%. Review the less successful landings and compare your approach speed, rotation and timing."])}
+else{rec.push(["strong","Good landing consistency","You landed cleanly on "+Math.round(landRate*100)+"%+"+" of recorded attempts. Keep that consistency while gradually varying your tricks."])}
+if(d.crashes>0){score-=Math.min(25,d.crashes*5);rec.push(["priority","Reduce crashes","There were "+d.crashes+" crashes. Review those timestamps first. Check whether you were still rotating at touchdown or were off-centre, then adjust one factor at a time."])}
+if(d.tricks>0&&d.uniqueTricks>0){const variety=d.uniqueTricks/Math.max(1,d.tricks);if(variety<.35){score-=10;rec.push(["priority","Build trick variety","A lot of the recorded airs used the same trick types. Cork7's published scoring guide reduces rewards for repeating the same trick; add variety gradually while preserving clean landings."])}else if(variety>.7){rec.push(["strong","Healthy trick variety","Your recorded trick types are varied. Keep checking that new combinations are still landed cleanly."])}}
+if(d.repeatTricks>0&&d.tricks>0){const repeatRate=d.repeatTricks/d.tricks;if(repeatRate>.4){score-=7;rec.push(["normal","Watch repeated tricks","A large share of the airs were repeats. Use the replay to plan a different trick for one or two features rather than changing every jump at once."])}}
+if(d.grabSeconds>0&&d.grabSeconds<.25){score-=7;rec.push(["normal","Hold grabs long enough to register","The average hold is under 0.25 seconds. Cork7's published guide says a grab needs at least 0.25 seconds to count. Aim for a controlled hold, then release before landing."])}
+else if(d.grabSeconds>=.25&&d.grabSeconds<1){rec.push(["strong","Grab timing is registering","Your average grab hold reaches the published 0.25-second threshold. Review whether you are releasing early enough to prepare for landing."])}
+else if(d.grabSeconds>=1){rec.push(["normal","Balance longer grabs with landing setup","Longer holds can add rotation points, but do not sacrifice a controlled landing just to extend the grab."])}
+if(d.railSeconds>0){rec.push(["normal","Review rail entries and exits","You logged "+d.railSeconds.toFixed(1)+" seconds on rails. Check each entry and exit in the clip; smooth transitions and a clean exit matter more than staying on for as long as possible."])}
+if(d.airtime>0&&d.duration>0&&d.airtime/d.duration>.45){score-=4;rec.push(["normal","Check time spent airborne","A large share of the run was airborne. Make sure each feature has a clear setup and landing rather than rushing into the next one."])}
+if(d.maxSpeed>0){rec.push(["normal","Use speed consistently","Top speed recorded: "+d.maxSpeed.toFixed(1)+" km/h. Compare it across runs on the same park; only compare runs with similar routes."])}
+if(!rec.length)rec.push(["normal","Add more run detail","Enter the run statistics and replay markers to unlock more specific coaching."]);
+score=Math.max(0,Math.min(100,Math.round(score)));
+return{index:score,landRate:landRate,recommendations:rec,summary:d.runName+" — "+d.park+" — technique index "+score+"/100",createdAt:new Date().toISOString()};
+}
+function renderReport(a){
+latestAnalysis=a;$("index").textContent=a.index;$("meterFill").style.width=a.index+"%";$("reportLabel").textContent="ANALYSIS COMPLETE";$("indexCaption").textContent=a.index>=85?"STRONG SESSION":a.index>=65?"BUILDING CONSISTENCY":"PRACTICE FOCUS";
+$("recommendations").innerHTML=a.recommendations.map(r=>'<article class="rec '+(r[0]==="priority"?"priority":"")+'"><b>'+safe(r[1])+'</b><p>'+safe(r[2])+'</p></article>').join("");
+latestReport=a.summary+"\n"+a.recommendations.map((r,i)=>(i+1)+". "+r[1]+": "+r[2]).join("\n");
+}
+function runAnalysis(){const d=getData();const a=analyse(d);renderReport(a);return{...d,analysis:a}}
+function renderHistory(){const el=$("history");$("historyCount").textContent=runs.length+" SAVED RUN"+(runs.length===1?"":"S");if(!runs.length){el.innerHTML='<div class="empty">Saved analyses will appear here. They stay in this browser unless you export them.</div>';return}el.innerHTML=runs.slice(0,20).map((r,i)=>'<div class="run"><div><b>'+safe(r.runName)+'</b><small>'+safe(r.park)+' · '+safe(new Date(r.analysis?.createdAt||r.createdAt||Date.now()).toLocaleDateString())+' · '+Number(r.score||0).toLocaleString()+' points</small></div><strong>'+(r.analysis?.index??"—")+'</strong><button class="btn" data-load="'+i+'">View</button></div>').join("");el.querySelectorAll("[data-load]").forEach(b=>b.addEventListener("click",()=>{const r=runs[Number(b.dataset.load)];fields.forEach(k=>{if($(k)&&r[k]!=null)$(k).value=r[k]});events=Array.isArray(r.events)?r.events.slice():[];renderMarkers();if(r.analysis)renderReport(r.analysis);window.scrollTo({top:0,behavior:"smooth"})}))}
+function download(name,data){const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+function saveRun(){const r=runAnalysis();r.createdAt=new Date().toISOString();runs.unshift(r);runs=runs.slice(0,100);persist();renderHistory()}
+function importObject(o){const d=o.run||o;if(!d||typeof d!=="object")throw new Error("JSON must contain a run object.");fields.forEach(k=>{if($(k)&&d[k]!=null)$(k).value=d[k]});events=Array.isArray(d.events)?d.events:[];renderMarkers();runAnalysis()}
+$("videoFile").addEventListener("change",e=>{const f=e.target.files&&e.target.files[0];if(!f)return;if(videoUrl)URL.revokeObjectURL(videoUrl);videoUrl=URL.createObjectURL(f);$("preview").src=videoUrl;$("preview").hidden=false;$("videoName").textContent=f.name+" · "+(f.size/1048576).toFixed(1)+" MB · previewed locally";events=[];renderMarkers()});
+[["markJump","Jump"],["markGrab","Grab"],["markRail","Rail"],["markLanding","Landing"],["markCrash","Crash"]].forEach(([id,type])=>$(id).addEventListener("click",()=>addEvent(type)));
+$("analyse").addEventListener("click",runAnalysis);$("saveRun").addEventListener("click",saveRun);
+$("export").addEventListener("click",()=>download("cork7-run-analysis.json",runAnalysis()));
+$("template").addEventListener("click",()=>download("cork7-run-template.json",{runName:"Apex practice run",park:"APEX",score:0,duration:0,maxSpeed:0,airtime:0,totalLandings:0,cleanLandings:0,crashes:0,tricks:0,uniqueTricks:0,repeatTricks:0,grabSeconds:0,railSeconds:0,notes:"",events:[]}));
+$("exportAll").addEventListener("click",()=>download("cork7-coach-progress.json",{version:1,exportedAt:new Date().toISOString(),runs:runs}));
+$("importData").addEventListener("click",()=>$("jsonFile").click());
+$("jsonFile").addEventListener("change",async e=>{const f=e.target.files&&e.target.files[0];if(!f)return;try{const o=JSON.parse(await f.text());if(Array.isArray(o.runs)){runs=o.runs.concat(runs).slice(0,100);persist();renderHistory()}else importObject(o);alert("Import complete.")}catch(err){alert("Could not import this file: "+err.message)}e.target.value=""});
+$("copyReport").addEventListener("click",async()=>{if(!latestReport){alert("Analyse a run first.");return}try{await navigator.clipboard.writeText(latestReport);$("copyReport").textContent="Copied"}catch(_){alert(latestReport)}});
+renderHistory();
+})();
+</script>
+</body>
+</html>

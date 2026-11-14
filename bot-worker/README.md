@@ -16,9 +16,10 @@ Always-on Northflank service for the Apex Lab learning simulator.
 - `GET /health` (unauthed, non-sensitive health check)
 - `GET /api/status` (Bearer token)
 - `GET /api/replay` (Bearer token)
+- `POST /api/coach` (Bearer token): saves a compact player-performance profile from the Replay Coach; it adjusts simulator fitness priorities for clean landings, crash avoidance and trick variety
 - `POST /api/start`, `/api/pause`, `/api/resume`, `/api/reset` (Bearer token)
 
-The worker runs an original Apex-inspired skiing simulation with a compact neural policy and neuroevolution: tournament selection, elite preservation, crossover, Gaussian mutation with adaptive mutation strength, and novelty rewards for discovering trick variety.
+The worker runs an original Apex-inspired skiing simulation with a compact neural policy and neuroevolution: tournament selection, elite preservation, crossover, Gaussian mutation with adaptive mutation strength, and novelty rewards for discovering trick variety. Replay Coach summaries can tune the fitness weights; video files and Cork7 gameplay sessions are not sent to this service.
 
 ## Northflank setup
 

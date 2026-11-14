@@ -480,7 +480,7 @@ export class Cork7Agent {
       containerMemoryMb: currentBytes == null ? null : Math.round(currentBytes / 1048576),
       containerMemoryLimitMb: limitBytes == null ? null : Math.round(limitBytes / 1048576),
       cpuLimitCores: (() => {
-        const parts = String(cpuMax || "").split(/\\s+/);
+        const parts = String(cpuMax || "").trim().split(" ").filter(Boolean);
         const quota = Number(parts[0]), period = Number(parts[1]);
         return parts[0] && parts[0] !== "max" && quota > 0 && period > 0
           ? Math.round((quota / period) * 100) / 100 : null;

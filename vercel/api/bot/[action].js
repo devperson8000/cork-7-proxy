@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 const ALLOWED = new Set(["status", "replay", "start", "pause", "resume", "reset", "coach", "owner-login", "owner-session", "owner-logout", "cork7-status", "cork7-snapshot", "cork7-start", "cork7-act", "cork7-restart", "cork7-stop", "cork7-train-start", "cork7-train-pause", "cork7-client-training"]);
 const OWNER_COOKIE = "cork7_owner";
 const SESSION_SECONDS = 7 * 24 * 60 * 60;

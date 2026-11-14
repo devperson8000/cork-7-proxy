@@ -628,6 +628,20 @@ function localReadRuntimeSignals(ctx){
       }
     }
   }catch{}
+  try{
+    const storage=ctx.win.localStorage;
+    const storageKeys=[];
+    for(let i=0;i<Math.min(storage.length,250);i++){
+      const key=storage.key(i)||"";
+      if(!/(score|run|replay|history|record)/i.test(key))continue;
+      storageKeys.push(key);
+      const raw=storage.getItem(key);
+      if(raw&&raw.length<100000){
+        try{inspectObject(JSON.parse(raw),"localStorage."+key,0);}catch{addScore("localStorage."+key,raw);}
+      }
+    }
+    runtimeKeys.push(...storageKeys.slice(0,20).map(k=>"storage:"+k));
+  }catch{}
   return {
     score:scores.length?scores[0]:null,
     scores:scores.slice(0,12),
@@ -653,12 +667,6 @@ function localReadStatus(){
     canvasSize:canvas?{width:canvas.width,height:canvas.height}:null,
     title:ctx.doc.title||""
   };
-}
-function localReadStatus(){
-  const ctx=getLocalGameContext();
-  const text=localGameText(ctx);
-  const canvasCount=ctx.doc.querySelectorAll("canvas").length;
-  return {ctx,text,canvasCount,score:localDetectScore(text),phase:localDetectPhase(text,canvasCount),title:ctx.doc.title||""};
 }
 function renderLocalStatus(status){
   localGameLoaded=true;
@@ -959,17 +967,19 @@ async function waitLocalUntil(target){
 }
 async function runLocalPolicy(policy){
   let status=localReadStatus();
-  if(status.phase==="results"){
-    await holdLocalKeys(["r"],2200);
-    await localSleep(1800);
-    await holdLocalKeys(["f"],250);
-    await localSleep(1200);
-    status=localReadStatus();
-  }
-  if(status.phase!=="game")throw new Error("The Cork7 Solo run is not active yet. Open the game panel, complete Solo → APEX → Ride Solo, and start the actual run before training.");
+  if(status.phase!=="game"&&status.phase!=="results")throw new Error("The Cork7 Solo ride is not active. Enter Solo → APEX → Ride Solo first.");
+  $("c7SessionStatus").textContent="Resetting to a consistent start: holding R to restart, then F to skip the gondola…";
+  await holdLocalKeys(["r"],2100);
+  await localSleep(1400);
+  await holdLocalKeys(["f"],220);
+  await localSleep(1800);
+  status=localReadStatus();
+  if(status.phase!=="game")throw new Error("Cork7 did not return to an active ride after restart. No training score was recorded.");
   const started=Date.now();
-  for(const event of policy.events){
+  for(let index=0;index<policy.events.length;index++){
+    const event=policy.events[index];
     if(!localTraining)return {cancelled:true};
+    $("c7SessionStatus").textContent="Playing "+(policy.name||"strategy")+" · feature action "+(index+1)+" of "+policy.events.length;
     await waitLocalUntil(started+Math.max(0,event.atMs-(event.preloadMs||400)));
     if(!localTraining)return {cancelled:true};
     status=localReadStatus();
@@ -981,13 +991,13 @@ async function runLocalPolicy(policy){
   const deadline=Date.now()+210000;
   status=localReadStatus();
   while(localTraining&&Date.now()<deadline&&status.phase!=="results"){
-    await localSleep(1000);
+    await localSleep(900);
     status=localReadStatus();
   }
   if(!localTraining)return {cancelled:true};
-  if(status.phase!=="results")throw new Error("The browser runner did not detect the Cork7 results screen after 210 seconds. No score has been invented or recorded.");
-  if(status.score==null)throw new Error("Cork7 reached its results screen, but the score is not exposed as readable page text. Training is paused until score capture can be connected.");
-  return {score:status.score,policy,capturedAt:new Date().toISOString()};
+  if(status.phase!=="results")throw new Error("The browser runner did not detect the Cork7 results screen after 210 seconds. No score was invented or saved. Check the diagnostics below for runtime and HUD signals.");
+  if(status.score==null)throw new Error("Cork7 reached its results screen, but no readable current-run score was found in the page, game runtime or recent-run browser storage. Training is paused rather than learning from a guessed score.");
+  return {score:status.score,scoreSource:status.scoreSource||"game runtime",policy,capturedAt:new Date().toISOString()};
 }
 function updateLocalTrainerDisplay(){
   $("c7TrainerStats").textContent=(localTraining?"AI TRAINING ON THIS COMPUTER":"AI STOPPED")+

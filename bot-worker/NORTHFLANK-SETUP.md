@@ -9,7 +9,7 @@ The existing Cork7 proxy service is `cork7/cork7-wisp`. Do not edit or redeploy 
 1. Open your Northflank organisation/team dashboard.
 2. Select **Create project**.
 3. Name it `apex-bot`.
-4. Choose a region supported by your account. A region close to you is suitable because the worker is CPU-only and the Vercel dashboard is accessed from your browser.
+4. Choose a region supported by your account. The worker now runs a headless Chromium browser as well as the CPU-based Apex simulator.
 5. Create the project.
 
 Northflank's Developer/Sandbox project allowance has changed across documentation. If your dashboard refuses a second project on the free plan, create the worker as a second service in the existing `cork7` project instead. Do not upgrade a plan or enter payment details just to get past a limit.
@@ -22,7 +22,7 @@ Northflank's Developer/Sandbox project allowance has changed across documentatio
 4. Branch: `feature/cork7-northflank-backend`.
 5. Build type: **Dockerfile**.
 6. Dockerfile path: `/bot-worker/Dockerfile`.
-7. Build context: repository root (`/`). The Dockerfile copies `bot-worker/package.json` and `bot-worker/index.mjs` relative to this context.
+7. Build context: repository root (`/`). The Dockerfile copies `bot-worker/package.json`, `bot-worker/index.mjs` and `bot-worker/cork7-agent.mjs` relative to this context. It uses the pinned Playwright browser image so the Chromium and Playwright versions match.
 8. Runtime command: leave the Dockerfile default (`node index.mjs`).
 9. Create the service.
 
@@ -65,16 +65,7 @@ This is required. Without a persistent volume, learning checkpoints can be lost 
 
 ## 6. Resources and free allowance
 
-Choose the smallest CPU plan initially:
-
-- `nf-compute-10`
-- `0.1` shared vCPU
-- `256` MB memory
-- One instance
-
-Northflank currently lists this plan at approximately **US$2.70/month**, with a 1 GiB disk around **US$0.15/month**. It is intentionally conservative to protect the shared free resource allowance. Training will be slower than on a larger CPU. Check the organisation's resource usage before leaving it running; the existing Cork7 proxy also consumes part of the shared allowance.
-
-If the worker is stable and there is room in the allowance, `nf-compute-20` (0.2 shared vCPU / 512 MB) is the next step up. Do not select GPU resources.
+**Important:** the old `256 MB` simulator allocation is too small for Chromium + Cork7's WebGL 2 game. The live browser agent needs at least **1 GiB memory**, with **2 GiB recommended** for more reliable WebGL sessions, and one shared vCPU or more. Use only resources already available in your organisation's current allowance. Do not purchase an upgrade just for this. If the current allocation cannot provide 1 GiB, the simulator may still run but the real Cork7 browser session is likely to be killed for memory.
 
 ## 7. Health check
 
@@ -86,7 +77,7 @@ Configure an HTTP health check:
 
 After the first deployment, open the generated public HTTPS hostname with `/health`. It should return JSON containing `"status":"ok"`.
 
-The API starts paused. It will not train until the Vercel dashboard sends a Start command.
+The Apex simulator starts paused. The Cork7 browser is also closed until you select a park and press **Launch Solo**. Chromium starts asynchronously; use **Refresh view** until the actual game is loaded. Start the real-game trainer only after the dashboard reports the phase as `game`.
 
 ## 8. Connect Vercel
 
@@ -104,12 +95,12 @@ Do not include `/health` or `/api` at the end of `APEX_BOT_URL`. Save and redepl
 1. Open `https://cork7game.vercel.app/bot/`.
 2. Wait for the status pill to show **WORKER CONNECTED / PAUSED**.
 3. Press **Start**.
-4. Confirm status changes to **CLOUD TRAINING ACTIVE** and run count/generation begin increasing.
-5. Close the laptop or browser. The Northflank service continues running and checkpointing.
+4. Confirm the Apex simulator changes to **CLOUD TRAINING ACTIVE**. For the real-game test, use the Cork7 panel: select APEX, press **Launch Solo**, wait for the live screenshot, then press **Start AI trainer**. The Cork7 trainer records only a score it can read from the game's results screen.
+5. The cloud worker stores the Apex state and Cork7 trainer's best policy in `/data`; the headless game session runs on Northflank while the worker is active.
 6. Reopen the dashboard. It should restore the latest telemetry and best-run data.
 7. Use **Pause** and **Resume** to confirm remote controls.
 8. When a best run exists, select **Watch best run** to render a WebM replay from the saved frames.
 
 ## Scope note
 
-The worker trains the independent Apex Lab skiing simulation. It does not automate the official Cork7 website, inject inputs into a Cork7 account, inspect private game state, or submit Cork7 scores. The existing `cork7-wisp` service remains untouched.
+The Cork7 agent opens a fresh, unsigned Solo browser context and uses normal keyboard inputs. It does not sign in, enter multiplayer/ranked modes or submit scores through a Cork7 account. Score-based training depends on the current results screen exposing the score as page text; if it is canvas-only, the trainer stops and reports that rather than inventing a result. The existing `cork7-wisp` service remains untouched.

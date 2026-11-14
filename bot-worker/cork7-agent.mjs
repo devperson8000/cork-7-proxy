@@ -375,14 +375,14 @@ export class Cork7Agent {
     const beforeLaunchResources = await this.resourceMetrics();
     const memoryLimitMb = beforeLaunchResources.containerMemoryLimitMb;
     const cpuLimitCores = beforeLaunchResources.cpuLimitCores;
-    const memoryTooSmall = Number.isFinite(memoryLimitMb) && memoryLimitMb < 768;
+    const memoryTooSmall = !Number.isFinite(memoryLimitMb) || memoryLimitMb < 1024;
     const cpuTooSmall = Number.isFinite(cpuLimitCores) && cpuLimitCores < 0.25;
     if (memoryTooSmall || cpuTooSmall) {
       this.starting = false;
-      this.lastError = "The Northflank container is too small for a safe WebGL launch (" +
-        (Number.isFinite(memoryLimitMb) ? Math.round(memoryLimitMb) + " MB RAM" : "RAM limit unknown") +
-        ", " + (Number.isFinite(cpuLimitCores) ? cpuLimitCores + " vCPU" : "CPU quota unknown") +
-        "). The worker has stopped before starting Chromium to avoid another resource spike. Keep the free tier; use at least 1 GB RAM and 0.25 vCPU only if that fits your remaining free resource allowance.";
+      this.lastError = "The Northflank container is not confirmed to have enough resources for a safe WebGL launch (" +
+        (Number.isFinite(memoryLimitMb) ? Math.round(memoryLimitMb) + " MB RAM" : "RAM limit could not be detected") +
+        ", " + (Number.isFinite(cpuLimitCores) ? cpuLimitCores + " vCPU" : "CPU quota not detected") +
+        "). Chromium was not launched, to avoid another resource spike. Keep the free tier; this needs a confirmed 1 GB RAM allocation and at least 0.25 vCPU.";
       this.lastAction = "Browser launch blocked to prevent an out-of-memory crash";
       return this.status();
     }

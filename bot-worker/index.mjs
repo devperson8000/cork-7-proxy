@@ -428,6 +428,9 @@ const server = http.createServer(async (req, res) => {
       }
       if (req.method !== "POST") return json(res, 405, { error: "Method not allowed" });
       const input = await readJsonBody(req, 8000);
+      if (action === "client-training") {
+        return json(res, 200, { trainer: await cork7Agent.syncBrowserTrainer(input) });
+      }
       if (action === "start") {
         if (cork7Agent.page && !cork7Agent.page.isClosed()) {
           return json(res, 200, await cork7Agent.status({ screenshot: true }));

@@ -511,7 +511,7 @@ async function loginOwner(){
     refreshOwnerControls();
   }
 }
-async async function logoutOwner(){
+async function logoutOwner(){
   if(ownerAuthorized&&localTraining)await stopLocalTraining();
   try{await api("owner-logout","POST",{});}catch{}
   ownerAuthorized=false;
@@ -713,7 +713,7 @@ async function holdLocalKeys(keys,durationMs){
   const ctx=getLocalGameContext();
   const normalized=[...new Set(keys)];
   for(const key of normalized){dispatchLocalKey(ctx,key,"keydown");localActiveKeys.add(key);}
-  try{await localSleep(Math.max(50,Math.min(1400,Number(durationMs)||250)));}
+  try{await localSleep(Math.max(50,Math.min(3000,Number(durationMs)||250)));}
   finally{
     for(const key of normalized){
       dispatchLocalKey(ctx,key,"keyup");

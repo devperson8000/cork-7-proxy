@@ -21,6 +21,14 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
 @media(max-width:930px){.grid{grid-template-columns:1fr}.side{grid-template-columns:repeat(2,minmax(0,1fr))}.side .panel:last-child{grid-column:1/-1}}
 @media(max-width:620px){.shell{padding:16px 11px 27px}.topbar{align-items:flex-start}.top-right{gap:6px}.pill{font-size:8px;padding:8px 9px}.heading{align-items:flex-start;flex-direction:column}.course{font-size:9px}.side{grid-template-columns:1fr}.side .panel:last-child{grid-column:auto}.canvas-wrap{height:350px}.controls{align-items:flex-start}.btnrow{width:100%}.btnrow .btn{flex:1}.best-actions{flex-wrap:wrap}}
 .realgame{margin:0 0 15px}.realgame-body{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(260px,.7fr);gap:14px;padding:14px 16px}.realgame-screen{width:100%;display:block;aspect-ratio:16/9;object-fit:contain;background:#03090c;border:1px solid var(--line);border-radius:10px}.realgame-tools{display:grid;gap:9px;align-content:start}.realgame-controls{display:flex;gap:6px;flex-wrap:wrap}.realgame-controls .btn{min-width:44px}.realgame-select{min-height:36px;border:1px solid var(--line);border-radius:8px;background:#0a171c;color:var(--text);padding:7px 9px;font-size:10px}.realgame-status{font-size:10px;color:#b8cbc8;line-height:1.55;overflow-wrap:anywhere}.realgame-status pre{white-space:pre-wrap;max-height:160px;overflow:auto;background:#081318;border:1px solid var(--line);border-radius:8px;padding:9px;color:#9fb8b4;font-size:9px}.realgame-dot{color:var(--cyan);font-weight:800}@media(max-width:800px){.realgame-body{grid-template-columns:1fr}}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+.owner-access{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:-11px 0 22px;padding:12px 14px;border:1px solid rgba(176,211,211,.15);border-radius:12px;background:rgba(12,23,29,.72)}
+.owner-access .owner-title{font-size:9px;letter-spacing:.13em;font-weight:850;color:var(--mint)}
+.owner-access input{min-width:220px;max-width:320px;min-height:36px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#071318;color:var(--text);font:inherit;font-size:11px}
+.owner-access button{min-height:36px}
+.owner-access .owner-state{font-size:10px;color:var(--muted);flex:1;min-width:180px}
+.c7-local-frame-wrap{position:relative;overflow:hidden;min-height:310px;aspect-ratio:16/9;background:#03090c;border:1px solid var(--line);border-radius:10px}
+.c7-local-frame-wrap iframe{width:100%;height:100%;min-height:310px;border:0;display:block;background:#000}
+@media(max-width:620px){.owner-access input{min-width:0;max-width:none;flex:1}.owner-access .owner-state{flex-basis:100%}}
 </style>
 </head>
 <body>
@@ -34,46 +42,57 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
     </div>
   </header>
 
+  <section class="owner-access" aria-label="Owner-only training controls">
+    <span class="owner-title">PRIVATE OWNER ACCESS</span>
+    <input id="ownerPasscode" type="password" autocomplete="current-password" placeholder="Owner access code" aria-label="Owner access code">
+    <button class="btn primary" id="ownerLogin">Unlock controls</button>
+    <button class="btn" id="ownerLogout" hidden>Lock controls</button>
+    <span class="owner-state" id="ownerStatus">Training controls locked. Enter your private owner code.</span>
+  </section>
+
   <div class="heading">
-    <div><div class="eyebrow">REMOTE TRAINING / NEUROEVOLUTION</div><h1>Teach it to ride.</h1><div class="subhead">Control your cloud-hosted AI from here. The Northflank worker runs the neural policy and training loop independently, saves checkpoints and sends live telemetry back to this dashboard.</div></div>
+    <div><div class="eyebrow">REMOTE TRAINING / NEUROEVOLUTION</div><h1>Teach it to ride.</h1><div class="subhead">Run the actual Cork7 game and AI training in this browser using your computer's CPU and graphics hardware. Northflank stores the learning checkpoints; it no longer needs to launch Chromium.</div></div>
     <div class="course">✳ APEX / FREESTYLE LINE</div>
   </div>
 
   <section class="panel realgame">
     <div class="panel-head">
-      <div><div class="panel-title">CORK7 / REAL GAME SESSION</div><div class="panel-meta" style="margin-top:4px">APEX / SOLO BROWSER · LOCAL RUNS · NO ACCOUNT LOGIN</div></div>
+      <div><div class="panel-title">CORK7 / REAL GAME SESSION</div><div class="panel-meta" style="margin-top:4px">APEX / SOLO BROWSER · LOCAL RUNS · OWNER-LOCKED TRAINING</div></div>
       <div class="panel-meta" id="c7Phase">NOT CONNECTED</div>
     </div>
     <div class="realgame-body">
       <div>
-        <img id="c7Screen" class="realgame-screen" alt="Live Cork7 browser session will appear here" hidden>
-        <div class="realgame-screen" id="c7ScreenEmpty" style="display:grid;place-items:center;color:var(--muted);font-size:11px">Launch an APEX Solo session to view the actual Cork7 game</div>
+        <div class="c7-local-frame-wrap">
+          <iframe id="c7LocalPlayer" title="Cork7 running in this browser on your computer" src="about:blank" allow="autoplay; fullscreen; gamepad" allowfullscreen></iframe>
+          <div class="realgame-screen" id="c7ScreenEmpty" style="display:grid;place-items:center;color:var(--muted);font-size:11px">Open Cork7 here to run the actual game using this computer's browser and graphics hardware.</div>
+        </div>
+        <img id="c7Screen" class="realgame-screen" alt="Legacy remote screenshot" hidden style="display:none">
       </div>
       <div class="realgame-tools">
-        <div class="realgame-status" id="c7SessionStatus">The real-game browser has not been started. This opens a fresh unsigned Solo session on the Northflank worker.</div>
+        <div class="realgame-status" id="c7SessionStatus">The actual Cork7 player will run inside this page on your computer. Northflank will only coordinate and save learning checkpoints.</div>
         <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">
           <select id="c7Park" class="realgame-select" aria-label="Cork7 park"><option>APEX</option></select>
-          <button class="btn primary" id="c7Start">Launch Solo</button>
+          <button class="btn primary" id="c7Start" data-owner-only disabled>Open Cork7 here</button>
           <button class="btn" id="c7Observe">Refresh view</button>
-          <button class="btn" id="c7Restart">Restart run</button>
-          <button class="btn danger" id="c7Stop">Close session</button>
+          <button class="btn" id="c7Restart" data-owner-only disabled>Restart run</button>
+          <button class="btn danger" id="c7Stop" data-owner-only disabled>Close local game</button>
         </div>
         <div class="panel-meta">NORMAL GAME INPUTS / EXPERIMENTAL CONTROL</div>
         <div class="realgame-controls">
-          <button class="btn" data-c7key="a">A</button><button class="btn" data-c7key="d">D</button>
-          <button class="btn" data-c7key="w">W</button><button class="btn" data-c7key="s">S</button>
-          <button class="btn" data-c7key="Space">SPACE</button><button class="btn" data-c7key="Shift">SHIFT</button>
-          <button class="btn" data-c7key="q">Q</button><button class="btn" data-c7key="e">E</button>
-          <button class="btn" data-c7key="ArrowLeft">←</button><button class="btn" data-c7key="ArrowRight">→</button>
-          <button class="btn" data-c7key="ArrowUp">↑</button><button class="btn" data-c7key="ArrowDown">↓</button>
+          <button class="btn" data-c7key="a" data-owner-only disabled>A</button><button class="btn" data-c7key="d" data-owner-only disabled>D</button>
+          <button class="btn" data-c7key="w" data-owner-only disabled>W</button><button class="btn" data-c7key="s" data-owner-only disabled>S</button>
+          <button class="btn" data-c7key="Space" data-owner-only disabled>SPACE</button><button class="btn" data-c7key="Shift" data-owner-only disabled>SHIFT</button>
+          <button class="btn" data-c7key="q" data-owner-only disabled>Q</button><button class="btn" data-c7key="e" data-owner-only disabled>E</button>
+          <button class="btn" data-c7key="ArrowLeft" data-owner-only disabled>←</button><button class="btn" data-c7key="ArrowRight" data-owner-only disabled>→</button>
+          <button class="btn" data-c7key="ArrowUp" data-owner-only disabled>↑</button><button class="btn" data-c7key="ArrowDown" data-owner-only disabled>↓</button>
         </div>
         <div class="realgame-status"><span class="realgame-dot">LIVE FEEDBACK</span> <span id="c7Details">Waiting for browser session.</span></div>
         <div class="panel-meta">REAL-GAME SCORE TRAINER / EXPERIMENTAL</div>
         <div class="realgame-controls">
-          <button class="btn primary" id="c7TrainStart">Start AI trainer</button>
-          <button class="btn" id="c7TrainPause">Pause trainer</button>
+          <button class="btn primary" id="c7TrainStart" data-owner-only disabled>Start AI trainer</button>
+          <button class="btn" id="c7TrainPause" data-owner-only disabled>Stop training</button>
         </div>
-        <div class="realgame-status" id="c7TrainerStats">No Cork7 training runs yet. The trainer mutates timed trick-key policies and keeps the best results-screen score.</div>
+        <div class="realgame-status" id="c7TrainerStats">No Cork7 training runs yet. The browser runner tests timed trick-key policies against actual Cork7 results-screen scores and saves its best policy to Northflank.</div>
         <div class="realgame-status"><pre id="c7PageText">Cork7 page text / HUD diagnostics will appear here.</pre></div>
       </div>
     </div>
@@ -195,9 +214,9 @@ function renderCork7(data){
       :data.lastError
         ?"Cork7 launch failed: "+data.lastError
         :resourceBlocked
-          ?"Launch safely blocked. Free-tier candidate: nf-compute-50 (0.5 shared vCPU / 1 GB RAM, listed at US$12/month). Only change to it when Northflank Billing → Usage confirms every service stays within the Sandbox's US$20/month allowance. Do not upgrade or add payment details."
+          "Northflank's small worker is now used for coordination and checkpoints. The Cork7 browser and training loop are intended to run locally in this page on your computer."
           :"No active Cork7 browser session is connected.";
-  $("c7Start").disabled=starting||!!data.connected||resourceBlocked;
+  $("c7Start").disabled=starting;
   $("c7Details").textContent="Score detected: "+(data.score==null?"not readable yet":Number(data.score).toLocaleString())+" · canvas: "+(data.canvasCount||0)+" · actions: "+(data.actionCount||0)+" · "+(data.lastAction||"");
   const trainer=data.trainer||{};
   $("c7TrainerStats").textContent="AI "+(trainer.training?"TRAINING":"PAUSED")+" · Generation "+(trainer.generation||1)+" · Runs "+(trainer.runsFinished||0)+" · Best Cork7 score "+(trainer.bestScore==null?"—":Number(trainer.bestScore).toLocaleString())+(trainer.coachProfile?" · Coach profile active":" · No player coach profile yet");
@@ -211,10 +230,8 @@ function renderCork7(data){
   const buildLine="Worker build: "+(data.workerBuild||"version not reported");
   $("c7PageText").textContent=buildLine+"\n"+memoryLine+"\n"+processLine+"\n\n"+
     (data.lastError?"ERROR: "+data.lastError+"\n\n":"")+(data.pageText||"No visible page text.");
-  if(data.screenshot){
-    $("c7Screen").src="data:image/jpeg;base64,"+data.screenshot;
-    $("c7Screen").hidden=false;$("c7ScreenEmpty").hidden=true;$("c7ScreenEmpty").style.display="none";
-  }
+  // The live game is rendered locally in the embedded /c7 player, not as a remote screenshot.
+
 }
 async function cork7Request(action,method="GET",payload=null){
   const data=await api("cork7-"+action,method,payload);renderCork7(data);return data;

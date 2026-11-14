@@ -273,32 +273,69 @@ export class Cork7Agent {
 
   async ensureBrowser() {
     if (this.browser && this.page && !this.page.isClosed()) return;
+
+    // Clean up a half-started or disconnected browser before retrying. This
+    // prevents each Launch click from leaving another Chromium process behind.
+    if (this.browser) {
+      await this.browser.close().catch(() => {});
+      this.browser = null;
+      this.context = null;
+      this.page = null;
+    }
+
+    // Software WebGL is CPU-heavy. Keep the browser surface deliberately small
+    // for the Northflank Sandbox allocation while preserving the game's WebGL.
     this.browser = await chromium.launch({
       headless: true,
+      timeout: 45000,
       args: [
         "--no-sandbox",
         "--disable-dev-shm-usage",
-        "--disable-background-timer-throttling",
-        "--disable-renderer-backgrounding",
+        "--disable-background-networking",
+        "--disable-extensions",
+        "--disable-default-apps",
+        "--disable-sync",
+        "--no-first-run",
+        "--mute-audio",
         "--enable-webgl",
         "--ignore-gpu-blocklist",
         "--use-gl=angle",
         "--use-angle=swiftshader",
-        "--enable-unsafe-swiftshader"
+        "--enable-unsafe-swiftshader",
+        "--force-device-scale-factor=0.75",
+        "--renderer-process-limit=2"
       ]
     });
-    this.context = await this.browser.newContext({
-      viewport: { width: 1440, height: 900 },
-      deviceScaleFactor: 1,
-      locale: "en-US",
-      colorScheme: "dark"
-    });
-    this.page = await this.context.newPage();
-    this.page.setDefaultTimeout(3500);
-    this.page.on("pageerror", error => { this.lastError = error.message.slice(0, 240); });
-    this.page.on("crash", () => { this.lastError = "Cork7 browser tab crashed."; });
-    this.startedAt = Date.now();
-    this.lastError = null;
+
+    try {
+      this.context = await this.browser.newContext({
+        viewport: { width: 960, height: 540 },
+        deviceScaleFactor: 0.75,
+        locale: "en-US",
+        colorScheme: "dark"
+      });
+      this.page = await this.context.newPage();
+      this.page.setDefaultTimeout(3500);
+      this.page.on("pageerror", error => { this.lastError = error.message.slice(0, 240); });
+      this.page.on("crash", () => {
+        this.lastError = "Cork7 browser tab crashed, possibly because the worker ran out of memory.";
+        this.training = false;
+      });
+      this.browser.on("disconnected", () => {
+        if (this.page && !this.page.isClosed()) {
+          this.lastError = "Chromium disconnected unexpectedly.";
+        }
+        this.training = false;
+      });
+      this.startedAt = Date.now();
+      this.lastError = null;
+    } catch (error) {
+      await this.browser.close().catch(() => {});
+      this.browser = null;
+      this.context = null;
+      this.page = null;
+      throw error;
+    }
   }
 
   async clickVisibleText(label) {
@@ -330,9 +367,29 @@ export class Cork7Agent {
     }
 
     this.park = chosenPark;
-    this.lastAction = "Opening a fresh, unsigned Cork7 Solo session";
+    this.lastAction = "Opening a fresh, unsigned Cork7 Solo session (low-resource mode)";
     this.lastError = null;
-    await this.ensureBrowser();
+
+    // Do not attempt to launch a browser in containers too small to hold
+    // Chromium plus a WebGL page. This avoids a predictable OOM restart loop.
+    const beforeLaunchResources = await this.resourceMetrics();
+    const memoryLimitMb = beforeLaunchResources.containerMemoryLimitMb;
+    if (Number.isFinite(memoryLimitMb) && memoryLimitMb < 384) {
+      this.starting = false;
+      this.lastError = "The Northflank container limit is only " + Math.round(memoryLimitMb) +
+        " MB. Chromium + Cork7 WebGL cannot run reliably in that allocation. Keep the free tier, but choose an available Sandbox resource size with at least 1 GB RAM if your remaining free allowance permits it.";
+      this.lastAction = "Browser launch blocked to prevent an out-of-memory crash";
+      return this.status();
+    }
+
+    try {
+      await this.ensureBrowser();
+    } catch (error) {
+      this.starting = false;
+      this.lastError = "Chromium launch failed: " + String(error?.message || error).slice(0, 320);
+      this.lastAction = "Chromium failed to start; worker kept alive";
+      return this.status();
+    }
 
     try {
       await this.page.goto(GAME_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
@@ -391,6 +448,40 @@ export class Cork7Agent {
     }
   }
 
+  async resourceMetrics() {
+    const readTextFile = async file => {
+      try { return (await fs.readFile(file, "utf8")).trim(); }
+      catch { return null; }
+    };
+    const [memoryCurrent, memoryLimit, memoryEvents, cpuStat] = await Promise.all([
+      readTextFile("/sys/fs/cgroup/memory.current"),
+      readTextFile("/sys/fs/cgroup/memory.max"),
+      readTextFile("/sys/fs/cgroup/memory.events"),
+      readTextFile("/sys/fs/cgroup/cpu.stat")
+    ]);
+    const parseCounter = (source, key) => {
+      const line = String(source || "").split("\\n").find(item => item.startsWith(key + " "));
+      return line ? Number(line.split(/\\s+/)[1]) : null;
+    };
+    const usage = process.memoryUsage();
+    const cpu = process.cpuUsage();
+    const numberOrNull = value => value && /^\\d+$/.test(value) ? Number(value) : null;
+    const currentBytes = numberOrNull(memoryCurrent);
+    const limitBytes = numberOrNull(memoryLimit);
+    return {
+      processRssMb: Math.round(usage.rss / 1048576),
+      processHeapMb: Math.round(usage.heapUsed / 1048576),
+      containerMemoryMb: currentBytes == null ? null : Math.round(currentBytes / 1048576),
+      containerMemoryLimitMb: limitBytes == null ? null : Math.round(limitBytes / 1048576),
+      oomKills: parseCounter(memoryEvents, "oom_kill"),
+      cpuTimeSeconds: Math.round((cpu.user + cpu.system) / 100000) / 10,
+      cpuThrottledSeconds: (() => {
+        const micros = parseCounter(cpuStat, "throttled_usec");
+        return micros == null ? null : Math.round(micros / 100000) / 10;
+      })()
+    };
+  }
+
   async status({ screenshot = false } = {}) {
     const text = await this.readText();
     const canvasCount = this.page && !this.page.isClosed()
@@ -411,12 +502,13 @@ export class Cork7Agent {
       pageTitle: this.page && !this.page.isClosed() ? await this.page.title().catch(() => "") : "",
       pageText: cleanText(text),
       trainer: this.trainerStatus(),
+      resourceUsage: await this.resourceMetrics(),
       elapsedSeconds: this.startedAt ? Math.round((Date.now() - this.startedAt) / 1000) : 0,
       capturedAt: new Date().toISOString()
     };
     if (screenshot && this.page && !this.page.isClosed()) {
       try {
-        const buffer = await this.page.screenshot({ type: "jpeg", quality: 55, timeout: 8000 });
+        const buffer = await this.page.screenshot({ type: "jpeg", quality: 38, timeout: 8000 });
         data.screenshot = buffer.toString("base64");
       } catch (error) {
         data.screenshotError = String(error?.message || error).slice(0, 180);

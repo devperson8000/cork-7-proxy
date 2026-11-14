@@ -6,6 +6,7 @@ const GAME_URL = "https://cork7.com/";
 const PARKS = new Set(["APEX", "THE YARD", "SHIRAKUMO", "FOREST LINE", "BIG AIR", "BELLEVUE", "ASPEN PIPE"]);
 const KEY_ALIASES = new Map([
   ["SPACE", "Space"], [" ", "Space"], ["LEFT", "ArrowLeft"], ["RIGHT", "ArrowRight"],
+  ["ARROWLEFT", "ArrowLeft"], ["ARROWRIGHT", "ArrowRight"], ["ARROWUP", "ArrowUp"], ["ARROWDOWN", "ArrowDown"],
   ["UP", "ArrowUp"], ["DOWN", "ArrowDown"], ["SHIFT", "Shift"],
   ["A", "a"], ["D", "d"], ["W", "w"], ["S", "s"], ["Q", "q"], ["E", "e"],
   ["B", "b"], ["F", "f"], ["R", "r"]
@@ -66,6 +67,7 @@ export class Cork7Agent {
           bestPolicy: value.bestPolicy || null,
           history: Array.isArray(value.history) ? value.history.slice(-80) : []
         };
+        this.coachProfile = value.coachProfile || null;
       }
     } catch (error) {
       if (error.code !== "ENOENT") this.lastError = "Could not restore Cork7 trainer state: " + error.message;

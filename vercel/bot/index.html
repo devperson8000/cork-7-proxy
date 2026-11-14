@@ -70,6 +70,12 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
           <button class="btn" data-c7key="ArrowUp">↑</button><button class="btn" data-c7key="ArrowDown">↓</button>
         </div>
         <div class="realgame-status"><span class="realgame-dot">LIVE FEEDBACK</span> <span id="c7Details">Waiting for browser session.</span></div>
+        <div class="panel-meta">REAL-GAME SCORE TRAINER / EXPERIMENTAL</div>
+        <div class="realgame-controls">
+          <button class="btn primary" id="c7TrainStart">Start AI trainer</button>
+          <button class="btn" id="c7TrainPause">Pause trainer</button>
+        </div>
+        <div class="realgame-status" id="c7TrainerStats">No Cork7 training runs yet. The trainer mutates timed trick-key policies and keeps the best results-screen score.</div>
         <div class="realgame-status"><pre id="c7PageText">Cork7 page text / HUD diagnostics will appear here.</pre></div>
       </div>
     </div>
@@ -157,6 +163,8 @@ function renderCork7(data){
   $("c7Phase").textContent=data.connected?String(data.phase||"CONNECTED").toUpperCase():"NOT CONNECTED";
   $("c7SessionStatus").textContent=data.connected?"Connected to "+data.site+" · "+data.mode+" · "+data.park:"Cork7 browser session is closed.";
   $("c7Details").textContent="Score detected: "+(data.score==null?"not readable yet":Number(data.score).toLocaleString())+" · canvas: "+(data.canvasCount||0)+" · actions: "+(data.actionCount||0)+" · "+(data.lastAction||"");
+  const trainer=data.trainer||{};
+  $("c7TrainerStats").textContent="AI "+(trainer.training?"TRAINING":"PAUSED")+" · Generation "+(trainer.generation||1)+" · Runs "+(trainer.runsFinished||0)+" · Best Cork7 score "+(trainer.bestScore==null?"—":Number(trainer.bestScore).toLocaleString())+(trainer.coachProfile?" · Coach profile active":" · No player coach profile yet");
   $("c7PageText").textContent=(data.lastError?"ERROR: "+data.lastError+"\n\n":"")+(data.pageText||"No visible page text.");
   if(data.screenshot){
     $("c7Screen").src="data:image/jpeg;base64,"+data.screenshot;
@@ -187,6 +195,13 @@ async function restartCork7(){
   try{await cork7Request("restart","POST",{});}
   catch(error){$("c7SessionStatus").textContent="Restart failed: "+error.message;}
   finally{$("c7Restart").disabled=false;}
+}
+async function trainCork7(action){
+  const button=action==="train-start"?$("c7TrainStart"):$("c7TrainPause");
+  button.disabled=true;
+  try{await cork7Request(action,"POST",{});}
+  catch(error){$("c7SessionStatus").textContent="Trainer command failed: "+error.message;}
+  finally{button.disabled=false;}
 }
 async function stopCork7(){
   $("c7Stop").disabled=true;
@@ -377,6 +392,8 @@ fitCanvas();poll();setInterval(poll,2500);
 $("c7Start").addEventListener("click",startCork7);
 $("c7Observe").addEventListener("click",observeCork7);
 $("c7Restart").addEventListener("click",restartCork7);
+$("c7TrainStart").addEventListener("click",()=>trainCork7("train-start"));
+$("c7TrainPause").addEventListener("click",()=>trainCork7("train-pause"));
 $("c7Stop").addEventListener("click",stopCork7);
 document.querySelectorAll("[data-c7key]").forEach(button=>button.addEventListener("click",()=>actCork7(button.dataset.c7key)));
 })();

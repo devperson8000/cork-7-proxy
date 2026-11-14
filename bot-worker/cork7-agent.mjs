@@ -34,9 +34,10 @@ function detectPhase(text, canvasCount) {
   const value = String(text || "").toLowerCase();
   if (/watch replay|save replay|run complete|run finished|ride again|total score/.test(value)) return "results";
   if (/choose a park|pick a park|ride solo|select park/.test(value)) return "park-select";
-  if (/solo\\s+picked|multiplayer|basecamp|locker|sign in|checking account/.test(value)) return "lobby";
-  if (canvasCount > 0) return "game";
-  return "loading";
+  const homeMenu = /solo\\s+picked/.test(value) && /\\bride\\b/.test(value);
+  if (canvasCount > 0 && !homeMenu) return "game";
+  if (homeMenu || /multiplayer|basecamp|locker|sign in|checking account/.test(value)) return "lobby";
+  return canvasCount > 0 ? "game" : "loading";
 }
 
 export class Cork7Agent {
@@ -106,19 +107,23 @@ export class Cork7Agent {
   }
 
   randomPolicy() {
-    const start = [10500, 23000, 35500, 48000];
+    const start = [14500, 33000, 51500, 70500];
     const grabKeys = ["q", "e", "Shift", null];
-    const events = start.map((base, index) => {
+    const events = [];
+    start.forEach((base, index) => {
+      const lipTime = Math.max(5500, base - 1250 + Math.round((Math.random() - 0.5) * 1800));
       const spin = Math.random() < 0.5 ? "a" : "d";
       const flip = Math.random() < 0.5 ? "w" : "s";
       const grab = grabKeys[Math.floor(Math.random() * grabKeys.length)];
-      const keys = [spin, flip, grab].filter(Boolean);
-      return {
-        atMs: Math.max(6000, base + Math.round((Math.random() - 0.5) * 6000)),
-        keys,
-        durationMs: 180 + Math.round(Math.random() * 560),
-        id: index + 1
-      };
+      const rodeo = Math.random() < 0.28;
+      const keys = [spin, flip, grab, ...(rodeo ? ["ArrowUp"] : [])].filter(Boolean);
+      events.push({ atMs: lipTime, keys: ["Space"], durationMs: 220 + Math.round(Math.random() * 360), id: index * 2 + 1 });
+      events.push({
+        atMs: lipTime + 350,
+        keys: [...new Set(keys)].slice(0, 4),
+        durationMs: 220 + Math.round(Math.random() * 520),
+        id: index * 2 + 2
+      });
     });
     return { events: events.sort((a, b) => a.atMs - b.atMs), createdAt: new Date().toISOString() };
   }
@@ -180,7 +185,7 @@ export class Cork7Agent {
   async runOnePolicy(policy) {
     if (!this.page || this.page.isClosed()) throw new Error("Cork7 browser session closed.");
     const initial = await this.status();
-    if (initial.phase === "results" || this.trainer.runsFinished > 0) {
+    if (initial.phase === "results") {
       await this.page.keyboard.down("r");
       await sleep(2200);
       await this.page.keyboard.up("r").catch(() => {});
@@ -334,14 +339,16 @@ export class Cork7Agent {
 
       text = await this.readText();
       if (text.toUpperCase().includes(chosenPark)) {
-        await this.clickVisibleText(chosenPark);
+        const parkClicked = await this.clickVisibleText(chosenPark);
+        if (!parkClicked) await this.page.keyboard.press("Enter").catch(() => {});
         await this.page.waitForTimeout(900);
       }
 
-      // The park picker and Ride button are in the normal public solo flow.
-      if (/ride|start/i.test(text) || text.toUpperCase().includes(chosenPark)) {
-        const rideClicked = await this.clickVisibleText("Ride") || await this.clickVisibleText("Ride Solo");
-        if (!rideClicked) await this.page.keyboard.press("Enter").catch(() => {});
+      // The normal solo flow shows Ride after the park is selected.
+      text = await this.readText();
+      const rideClicked = await this.clickVisibleText("Ride Solo") || await this.clickVisibleText("Ride");
+      if (!rideClicked && /ride|start|\\benter\\b/i.test(text)) {
+        await this.page.keyboard.press("Enter").catch(() => {});
       }
 
       await this.page.waitForTimeout(12000);

@@ -149,6 +149,7 @@ const chart = $("learningChart"), chartCtx = chart.getContext("2d");
 const video = $("bestVideo");
 let statusData = null, bestReplay = null, playback = null, recorder = null, chunks = [], videoUrl = null;
 let pollBusy = false, replayBusy = false, lastStatusAt = 0, currentFrame = null;
+let cork7PollTimer = null;
 const FEATURES = [
   {type:"jump",z:145,lane:-.42},{type:"rail",z:310,lane:.48,len:62},
   {type:"jump",z:490,lane:.45},{type:"rail",z:665,lane:-.48,len:68},
@@ -158,6 +159,22 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 function api(action,method="GET",payload=null){
   return fetch("/api/bot/"+action,{method,headers:method==="POST"?{"Content-Type":"application/json"}:{},body:method==="POST"?JSON.stringify(payload||{}):undefined,cache:"no-store"})
     .then(async r=>{const body=await r.json().catch(()=>({error:"Invalid response"}));if(!r.ok)throw new Error(body.error||("Worker returned "+r.status));return body;});
+}
+function startCork7Polling(){
+  if(cork7PollTimer)clearInterval(cork7PollTimer);
+  cork7PollTimer=setInterval(async()=>{
+    try{
+      const data=await cork7Request("snapshot");
+      if(!data.connected&&!data.starting){
+        clearInterval(cork7PollTimer);
+        cork7PollTimer=null;
+      }
+    }catch(error){
+      $("c7SessionStatus").textContent="Live Cork7 status unavailable: "+error.message;
+      clearInterval(cork7PollTimer);
+      cork7PollTimer=null;
+    }
+  },4000);
 }
 function renderCork7(data){
   $("c7Phase").textContent=data.connected?String(data.phase||"CONNECTED").toUpperCase():"NOT CONNECTED";
@@ -176,7 +193,7 @@ async function cork7Request(action,method="GET",payload=null){
 }
 async function startCork7(){
   $("c7Start").disabled=true;$("c7SessionStatus").textContent="Starting Chromium and loading cork7.com…";
-  try{await cork7Request("start","POST",{park:$("c7Park").value});}
+  try{await cork7Request("start","POST",{park:$("c7Park").value});startCork7Polling();}
   catch(error){$("c7SessionStatus").textContent="Could not start Cork7: "+error.message;}
   finally{$("c7Start").disabled=false;}
 }
@@ -199,13 +216,13 @@ async function restartCork7(){
 async function trainCork7(action){
   const button=action==="train-start"?$("c7TrainStart"):$("c7TrainPause");
   button.disabled=true;
-  try{await cork7Request(action,"POST",{});}
+  try{await cork7Request(action,"POST",{});if(action==="train-start")startCork7Polling();}
   catch(error){$("c7SessionStatus").textContent="Trainer command failed: "+error.message;}
   finally{button.disabled=false;}
 }
 async function stopCork7(){
   $("c7Stop").disabled=true;
-  try{await cork7Request("stop","POST",{});$("c7Screen").hidden=true;$("c7ScreenEmpty").hidden=false;$("c7ScreenEmpty").style.display="grid";}
+  try{await cork7Request("stop","POST",{});if(cork7PollTimer){clearInterval(cork7PollTimer);cork7PollTimer=null;} $("c7Screen").hidden=true;$("c7ScreenEmpty").hidden=false;$("c7ScreenEmpty").style.display="grid";}
   catch(error){$("c7SessionStatus").textContent="Close failed: "+error.message;}
   finally{$("c7Stop").disabled=false;}
 }

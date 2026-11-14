@@ -28,6 +28,7 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
 .owner-access .owner-state{font-size:10px;color:var(--muted);flex:1;min-width:180px}
 .c7-local-frame-wrap{position:relative;overflow:hidden;min-height:310px;aspect-ratio:16/9;background:#03090c;border:1px solid var(--line);border-radius:10px}
 .c7-local-frame-wrap iframe{width:100%;height:100%;min-height:310px;border:0;display:block;background:#000}
+.c7-local-frame-wrap #c7ScreenEmpty{position:absolute;inset:0;z-index:2;width:100%;height:100%;min-height:0;aspect-ratio:auto;margin:0;border:0;border-radius:0;pointer-events:none}
 @media(max-width:620px){.owner-access input{min-width:0;max-width:none;flex:1}.owner-access .owner-state{flex-basis:100%}}
 </style>
 </head>
@@ -214,7 +215,7 @@ function renderCork7(data){
       :data.lastError
         ?"Cork7 launch failed: "+data.lastError
         :resourceBlocked
-          "Northflank's small worker is now used for coordination and checkpoints. The Cork7 browser and training loop are intended to run locally in this page on your computer."
+          ?"Northflank's small worker is now used for coordination and checkpoints. The Cork7 browser and training loop are intended to run locally in this page on your computer."
           :"No active Cork7 browser session is connected.";
   $("c7Start").disabled=starting;
   $("c7Details").textContent="Score detected: "+(data.score==null?"not readable yet":Number(data.score).toLocaleString())+" · canvas: "+(data.canvasCount||0)+" · actions: "+(data.actionCount||0)+" · "+(data.lastAction||"");
@@ -231,7 +232,7 @@ function renderCork7(data){
   $("c7PageText").textContent=buildLine+"\n"+memoryLine+"\n"+processLine+"\n\n"+
     (data.lastError?"ERROR: "+data.lastError+"\n\n":"")+(data.pageText||"No visible page text.");
   // The live game is rendered locally in the embedded /c7 player, not as a remote screenshot.
-
+  refreshOwnerControls();
 }
 async function cork7Request(action,method="GET",payload=null){
   const data=await api("cork7-"+action,method,payload);renderCork7(data);return data;
@@ -510,7 +511,8 @@ async function loginOwner(){
     refreshOwnerControls();
   }
 }
-async function logoutOwner(){
+async async function logoutOwner(){
+  if(ownerAuthorized&&localTraining)await stopLocalTraining();
   try{await api("owner-logout","POST",{});}catch{}
   ownerAuthorized=false;
   localTraining=false;
@@ -921,6 +923,8 @@ function setConnected(connected,running){
   $("startBtn").disabled=!connected||running;$("pauseBtn").disabled=!connected||!running;
   $("resumeBtn").disabled=!connected||running;$("resetBtn").disabled=!connected;
   $("replayBtn").disabled=!(statusData&&statusData.bestRun);
+  const simState={startBtn:!connected||running,pauseBtn:!connected||!running,resumeBtn:!connected||running,resetBtn:!connected};
+  for(const [id,disabled] of Object.entries(simState))$(id).dataset.ownerStateDisabled=disabled?"1":"0";
   refreshOwnerControls();
 }
 

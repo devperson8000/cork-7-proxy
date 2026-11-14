@@ -431,8 +431,14 @@ const server = http.createServer(async (req, res) => {
       if (action === "start") return json(res, 200, await cork7Agent.start({ park: input.park || "APEX" }));
       if (action === "act") return json(res, 200, await cork7Agent.act({ keys: input.keys, durationMs: input.durationMs }));
       if (action === "restart") return json(res, 200, await cork7Agent.restart());
-      if (action === "train-start") return json(res, 200, await cork7Agent.startTraining());
-      if (action === "train-pause") return json(res, 200, await cork7Agent.pauseTraining());
+      if (action === "train-start") {
+        await cork7Agent.startTraining();
+        return json(res, 200, await cork7Agent.status({ screenshot: true }));
+      }
+      if (action === "train-pause") {
+        await cork7Agent.pauseTraining();
+        return json(res, 200, await cork7Agent.status({ screenshot: true }));
+      }
       if (action === "stop") return json(res, 200, await cork7Agent.close());
       return json(res, 404, { error: "Unknown Cork7 action" });
     } catch (error) {

@@ -18,6 +18,19 @@
     const nativeRemove = proto.removeEventListener;
     const listeners = [];
 
+    // Dashboard clicks intentionally move focus out of the game iframe. Cork7
+    // treats a normal blur as a request to open its pause/menu UI, which makes
+    // the external training controls unusable. Suppress only blur events that
+    // immediately follow a dashboard interaction while this page is visible.
+    // Real tab/background changes still reach the game's own blur listeners.
+    const dashboardBlurGuard = event => {
+      const until = Number(win.__CORK7_DASHBOARD_INTERACTION_UNTIL || 0);
+      if (until > Date.now() && win.document?.visibilityState !== "hidden") {
+        event.stopImmediatePropagation();
+      }
+    };
+    try { win.addEventListener("blur", dashboardBlurGuard, true); } catch {}
+
     function optionsOf(value) {
       return typeof value === "boolean"
         ? { capture: value, once: false, passive: false, signal: null }

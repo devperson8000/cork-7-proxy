@@ -3,7 +3,7 @@ name: Cork7 browser regression
 on:
   workflow_dispatch:
   push:
-    branches: [feature/cork7-browser-agent-rework]
+    branches: [feature/cork7-browser-agent-rework, feature/cork7-northflank-backend]
     paths:
       - "vercel/c7-agent/**"
       - "vercel/bot/index.html"

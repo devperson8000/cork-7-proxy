@@ -41,6 +41,17 @@ with sync_playwright() as p:
       const baseline=agent.status();
       if(!baseline.canvasFound||baseline.canSend) throw new Error('unexpected baseline readiness');
 
+      // Dashboard clicks may shift focus out of the game frame. Suppress only
+      // that short intentional blur; ordinary blur events must still arrive.
+      let blurDelivered=0;
+      window.addEventListener('blur',()=>{blurDelivered++;});
+      window.__CORK7_DASHBOARD_INTERACTION_UNTIL=Date.now()+1000;
+      window.dispatchEvent(new Event('blur'));
+      if(blurDelivered!==0) throw new Error('dashboard-triggered blur was not suppressed');
+      window.__CORK7_DASHBOARD_INTERACTION_UNTIL=Date.now()-1;
+      window.dispatchEvent(new Event('blur'));
+      if(blurDelivered!==1) throw new Error('ordinary blur was incorrectly suppressed');
+
       // Unrelated key listeners must not make the game path ready.
       const outsideDown=()=>{}; const outsideUp=()=>{};
       unrelated.addEventListener('keydown',outsideDown);

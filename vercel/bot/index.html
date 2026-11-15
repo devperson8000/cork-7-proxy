@@ -786,12 +786,23 @@ function installGameFocusProtection(){
   document.addEventListener("mousedown",event=>{
     if(!localGameLoaded)return;
     const target=event.target;
-    if(!(target instanceof Element))return;
-    if(target.closest("#c7LocalPlayer,.c7-local-frame-wrap"))return;
-    // Keep the embedded Cork7 frame focused when clicking dashboard controls.
-    // Form fields and navigation links keep their normal browser behaviour.
-    if(target.closest("input,textarea,select,option,a,[contenteditable='true'],[data-c7-allow-focus]"))return;
-    if(target.closest(".shell"))event.preventDefault();
+    if(!(target instanceof Element)||target.closest("#c7LocalPlayer"))return;
+    if(!target.closest(".shell"))return;
+    // Mark this as an intentional dashboard interaction before the browser
+    // transfers focus away from Cork7. The game-side early hook suppresses
+    // only the short blur event that would otherwise open its pause menu.
+    try{
+      const ctx=getLocalGameContext();
+      ctx.win.__CORK7_DASHBOARD_INTERACTION_UNTIL=Date.now()+1200;
+      diagRecord("dashboard-interaction-focus-handoff",{target:diagTargetName(target)});
+    }catch(error){
+      diagRecord("dashboard-interaction-focus-handoff-unavailable",{
+        target:diagTargetName(target),
+        message:String(error&&error.message||error).slice(0,120)
+      });
+    }
+    // Do not preventDefault here. Dashboard buttons and inputs must receive
+    // their native mouse, click and focus behaviour.
   },true);
 }
 
@@ -927,7 +938,7 @@ function setOwnerStatus(message,isError=false){
 function refreshOwnerControls(){
   const state={
     c7Start:localGameLoading||localGameLoaded,
-    c7ConfirmRide:!localGameLoaded||localTraining||completionTestRunning,
+    c7ConfirmRide:localTraining||completionTestRunning,
     c7Restart:!localRideConfirmed||localTraining||completionTestRunning,
     c7Stop:!localGameLoaded||completionTestRunning,
     c7TestStart:localGameLoading||!localRideConfirmed||localTraining||completionTestRunning,

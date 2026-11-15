@@ -82,6 +82,17 @@ with sync_playwright() as p:
   page.wait_for_function("document.getElementById('ownerStatus').textContent.includes('Owner verified')",timeout=10000)
   page.locator('#c7Start').click()
   page.wait_for_function("document.getElementById('c7SessionStatus').textContent.includes('synthetic') || document.getElementById('c7SessionStatus').textContent.includes('keyboard')",timeout=10000)
+  assert not page.locator('#c7ConfirmRide').is_disabled(), 'Ride confirmation must be clickable after owner unlock and game load'
+  mouse_guard = page.evaluate("""() => {
+    const button=document.querySelector('#c7ConfirmRide');
+    const player=document.querySelector('#c7LocalPlayer');
+    const game=player.contentDocument.querySelector('.game-frame iframe').contentWindow;
+    const event=new MouseEvent('mousedown',{bubbles:true,cancelable:true});
+    button.dispatchEvent(event);
+    return {defaultPrevented:event.defaultPrevented,guardUntil:Number(game.__CORK7_DASHBOARD_INTERACTION_UNTIL||0)};
+  }""")
+  assert not mouse_guard['defaultPrevented'], mouse_guard
+  assert mouse_guard['guardUntil'] > page.evaluate('Date.now()'), mouse_guard
   page.locator('#c7ConfirmRide').click()
   assert page.locator('#c7ControlStatus').inner_text().lower().find('confirmed')>=0
   page.locator('#c7TestStart').click()

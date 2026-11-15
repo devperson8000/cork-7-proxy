@@ -496,6 +496,268 @@ let localTrainerCacheFound=false;
 let trainerSyncFingerprint="";
 let trainerSyncInFlight=null;
 
+const C7_DIAG_LIMIT=300;
+let c7DiagEvents=[];
+let c7DiagWindows=new WeakSet();
+let c7DiagLastPhase=null;
+let c7DiagInstalled=false;
+
+function diagTargetName(node){
+  if(!node)return "none";
+  if(node===window)return "window";
+  if(node===document)return "document";
+  if(!(node instanceof Element))return String(node.nodeName||"node").toLowerCase();
+  const tag=node.tagName.toLowerCase();
+  const id=node.id?"#"+node.id:"";
+  const classes=typeof node.className==="string"&&node.className.trim()
+    ?"."+node.className.trim().split(/\s+/).slice(0,3).join("."):"";
+  return (tag+id+classes).slice(0,120);
+}
+function diagIsEditable(node){
+  return !!(node instanceof Element&&node.closest("input,textarea,select,[contenteditable='true']"));
+}
+function diagSafePath(value){
+  try{
+    const url=new URL(String(value||""),location.href);
+    return url.origin+url.pathname;
+  }catch{return "";}
+}
+function diagRender(){
+  const status=$("c7DiagStatus"),output=$("c7DiagOutput");
+  const latest=c7DiagEvents[c7DiagEvents.length-1];
+  if(status){
+    status.textContent="TRACE ACTIVE · "+c7DiagEvents.length+"/"+C7_DIAG_LIMIT+
+      " EVENTS · PHASE "+(c7DiagLastPhase||"UNKNOWN")+
+      (latest?" · LAST "+latest.type+" @ "+new Date(latest.at).toLocaleTimeString():"");
+  }
+  if(output){
+    const tail=c7DiagEvents.slice(-22).reverse().map(item=>
+      new Date(item.at).toLocaleTimeString()+" · "+item.type+" · "+JSON.stringify(item.details||{}).slice(0,360)
+    );
+    output.textContent=tail.length?tail.join("\n"):"No diagnostic events yet.";
+  }
+}
+function diagRecord(type,details){
+  const event={at:new Date().toISOString(),elapsedMs:Math.round(performance.now()),type:String(type),details:details||{}};
+  c7DiagEvents.push(event);
+  if(c7DiagEvents.length>C7_DIAG_LIMIT)c7DiagEvents.splice(0,c7DiagEvents.length-C7_DIAG_LIMIT);
+  diagRender();
+  return event;
+}
+function diagFocusInfo(ctx){
+  const info={
+    dashboardHasFocus:document.hasFocus(),
+    dashboardVisibility:document.visibilityState,
+    dashboardActiveElement:diagTargetName(document.activeElement),
+    playerActiveElement:"unavailable",
+    gameActiveElement:"unavailable",
+    gameHasFocus:null,
+    gameVisibility:"unavailable",
+    dashboardPointerLock:diagTargetName(document.pointerLockElement),
+    dashboardFullscreen:diagTargetName(document.fullscreenElement)
+  };
+  try{
+    if(ctx){
+      info.playerActiveElement=diagTargetName(ctx.playerDoc.activeElement);
+      info.gameActiveElement=diagTargetName(ctx.doc.activeElement);
+      info.gameHasFocus=ctx.doc.hasFocus();
+      info.gameVisibility=ctx.doc.visibilityState;
+      info.gamePointerLock=diagTargetName(ctx.doc.pointerLockElement);
+      info.gameFullscreen=diagTargetName(ctx.doc.fullscreenElement);
+      info.gameCanvas=diagTargetName(getLocalGameCanvas(ctx.doc));
+      info.gameFrame=diagSafePath(ctx.doc.location.href);
+    }
+  }catch(error){info.frameAccessError=String(error&&error.message||error).slice(0,160);}
+  return info;
+}
+function diagSnapshot(reason){
+  let ctx=null,status=null;
+  try{ctx=getLocalGameContext();}catch(error){}
+  if(ctx){
+    try{
+      const text=localGameText(ctx);
+      const canvas=getLocalGameCanvas(ctx.doc);
+      const canvasCount=ctx.doc.querySelectorAll("canvas").length;
+      status={
+        phase:localDetectPhase(text,canvasCount),
+        score:localDetectScore(text),
+        title:ctx.doc.title||"",
+        canvasCount:canvasCount,
+        canvasSize:canvas?{width:canvas.width,height:canvas.height}:null,
+        frame:diagSafePath(ctx.doc.location.href),
+        playerFrame:diagSafePath(ctx.frame.src)
+      };
+    }catch(error){status={readError:String(error&&error.message||error).slice(0,160)};}
+  }
+  return {
+    reason:String(reason||"manual"),
+    capturedAt:new Date().toISOString(),
+    page:{
+      url:location.origin+location.pathname,
+      userAgent:navigator.userAgent,
+      platform:navigator.platform,
+      language:navigator.language,
+      viewport:{width:innerWidth,height:innerHeight,devicePixelRatio:devicePixelRatio},
+      hardwareConcurrency:navigator.hardwareConcurrency||null
+    },
+    session:{
+      ownerAuthorized:ownerAuthorized,
+      localGameLoading:localGameLoading,
+      localGameLoaded:localGameLoaded,
+      localRideConfirmed:localRideConfirmed,
+      localTraining:localTraining,
+      completionTestRunning:completionTestRunning,
+      lastAction:String(localLastAction||"").slice(0,140)
+    },
+    game:status,
+    focus:diagFocusInfo(ctx)
+  };
+}
+function diagObserveStatus(status){
+  if(!status)return;
+  const phase=String(status.phase||"unknown");
+  if(phase!==c7DiagLastPhase){
+    const previous=c7DiagLastPhase;
+    c7DiagLastPhase=phase;
+    diagRecord("game-phase-change",{
+      from:previous,
+      to:phase,
+      canvasCount:status.canvasCount,
+      score:status.score,
+      activeElement:status.activeElement
+    });
+    if(phase==="lobby"||phase==="park-select"){
+      diagRecord("possible-menu-open",{phase:phase,canvasCount:status.canvasCount,activeElement:status.activeElement});
+    }
+  }
+}
+function diagAttachGameFrame(ctx){
+  if(!ctx||!ctx.win||!ctx.doc||c7DiagWindows.has(ctx.win))return;
+  c7DiagWindows.add(ctx.win);
+  const keyEvent=(event,stage)=>{
+    if(diagIsEditable(event.target))return;
+    diagRecord("game-key-"+stage,{
+      key:String(event.key||"").slice(0,24),
+      code:String(event.code||"").slice(0,32),
+      eventType:event.type,
+      trusted:!!event.isTrusted,
+      repeat:!!event.repeat,
+      defaultPrevented:!!event.defaultPrevented,
+      target:diagTargetName(event.target),
+      activeElement:diagTargetName(ctx.doc.activeElement)
+    });
+  };
+  ["keydown","keyup","keypress"].forEach(type=>{
+    ctx.win.addEventListener(type,event=>keyEvent(event,"capture"),true);
+    ctx.doc.addEventListener(type,event=>keyEvent(event,"bubble"),false);
+  });
+  ["focus","blur"].forEach(type=>{
+    ctx.win.addEventListener(type,()=>diagRecord("game-window-"+type,diagFocusInfo(ctx)),true);
+  });
+  ["visibilitychange","pointerlockchange","fullscreenchange"].forEach(type=>{
+    ctx.doc.addEventListener(type,()=>diagRecord("game-"+type,{
+      visibility:ctx.doc.visibilityState,
+      pointerLock:diagTargetName(ctx.doc.pointerLockElement),
+      fullscreen:diagTargetName(ctx.doc.fullscreenElement),
+      focus:diagFocusInfo(ctx)
+    }),true);
+  });
+  ctx.frame.addEventListener("load",()=>diagRecord("game-frame-load",{src:diagSafePath(ctx.frame.src)}));
+  diagRecord("game-frame-attached",diagFocusInfo(ctx));
+}
+function diagReport(){
+  return {
+    schema:"cork7-dashboard-diagnostics-v1",
+    exportedAt:new Date().toISOString(),
+    snapshot:diagSnapshot("report-export"),
+    events:c7DiagEvents
+  };
+}
+function diagDownload(){
+  const blob=new Blob([JSON.stringify(diagReport(),null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const anchor=document.createElement("a");
+  anchor.href=url;
+  anchor.download="cork7-diagnostics-"+new Date().toISOString().replace(/[:.]/g,"-")+".json";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+  diagRecord("diagnostics-exported",{format:"json",eventCount:c7DiagEvents.length});
+}
+async function diagCopy(){
+  try{
+    await navigator.clipboard.writeText(JSON.stringify(diagReport(),null,2));
+    $("c7DiagStatus").textContent="Diagnostic report copied to clipboard.";
+    diagRecord("diagnostics-copied",{eventCount:c7DiagEvents.length});
+  }catch(error){
+    $("c7DiagStatus").textContent="Clipboard permission unavailable. Use Download report instead.";
+    diagRecord("diagnostics-copy-failed",{message:String(error&&error.message||error).slice(0,140)});
+  }
+}
+function installC7Diagnostics(){
+  if(c7DiagInstalled)return;
+  c7DiagInstalled=true;
+  const targetEvent=(event,type)=>diagRecord(type,{
+    target:diagTargetName(event.target),
+    activeElement:diagTargetName(document.activeElement),
+    defaultPrevented:!!event.defaultPrevented
+  });
+  document.addEventListener("mousedown",event=>targetEvent(event,"dashboard-mousedown"),true);
+  document.addEventListener("click",event=>targetEvent(event,"dashboard-click"),true);
+  document.addEventListener("focusin",event=>targetEvent(event,"dashboard-focusin"),true);
+  document.addEventListener("focusout",event=>targetEvent(event,"dashboard-focusout"),true);
+  ["keydown","keyup"].forEach(type=>{
+    document.addEventListener(type,event=>{
+      if(diagIsEditable(event.target))return;
+      diagRecord("dashboard-key-"+type,{
+        key:String(event.key||"").slice(0,24),
+        code:String(event.code||"").slice(0,32),
+        trusted:!!event.isTrusted,
+        target:diagTargetName(event.target),
+        activeElement:diagTargetName(document.activeElement)
+      });
+    },true);
+  });
+  ["focus","blur","pagehide","pageshow"].forEach(type=>{
+    window.addEventListener(type,()=>diagRecord("dashboard-window-"+type,{
+      hasFocus:document.hasFocus(),
+      visibility:document.visibilityState,
+      activeElement:diagTargetName(document.activeElement)
+    }),true);
+  });
+  ["visibilitychange","pointerlockchange","fullscreenchange"].forEach(type=>{
+    document.addEventListener(type,()=>diagRecord("dashboard-"+type,{
+      visibility:document.visibilityState,
+      pointerLock:diagTargetName(document.pointerLockElement),
+      fullscreen:diagTargetName(document.fullscreenElement),
+      activeElement:diagTargetName(document.activeElement)
+    }),true);
+  });
+  window.addEventListener("error",event=>diagRecord("dashboard-error",{
+    message:String(event.message||"Unknown error").slice(0,220),
+    source:diagSafePath(event.filename),
+    line:event.lineno||null,
+    column:event.colno||null
+  }));
+  window.addEventListener("unhandledrejection",event=>diagRecord("dashboard-unhandled-rejection",{
+    message:String(event.reason&&event.reason.message||event.reason||"Unknown rejection").slice(0,220)
+  }));
+  const player=$("c7LocalPlayer");
+  if(player)player.addEventListener("load",()=>diagRecord("player-iframe-load",{src:diagSafePath(player.src)}));
+  $("c7DiagSnapshot").addEventListener("click",()=>{
+    const snap=diagSnapshot("manual-button");
+    diagRecord("manual-snapshot",{phase:snap.game&&snap.game.phase||"unavailable",focus:snap.focus});
+  });
+  $("c7DiagCopy").addEventListener("click",diagCopy);
+  $("c7DiagExport").addEventListener("click",diagDownload);
+  $("c7DiagClear").addEventListener("click",()=>{
+    c7DiagEvents=[];
+    diagRecord("trace-cleared",{});
+  });
+  diagRecord("diagnostics-started",{limit:C7_DIAG_LIMIT});
+}
+
 function installGameFocusProtection(){
   if(window.__c7GameFocusProtectionInstalled)return;
   window.__c7GameFocusProtectionInstalled=true;

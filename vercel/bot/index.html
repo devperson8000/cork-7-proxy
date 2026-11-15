@@ -487,6 +487,21 @@ let localTrainerCacheFound=false;
 let trainerSyncFingerprint="";
 let trainerSyncInFlight=null;
 
+function installGameFocusProtection(){
+  if(window.__c7GameFocusProtectionInstalled)return;
+  window.__c7GameFocusProtectionInstalled=true;
+  document.addEventListener("mousedown",event=>{
+    if(!localGameLoaded)return;
+    const target=event.target;
+    if(!(target instanceof Element))return;
+    if(target.closest("#c7LocalPlayer,.c7-local-frame-wrap"))return;
+    // Keep the embedded Cork7 frame focused when clicking dashboard controls.
+    // Form fields and navigation links keep their normal browser behaviour.
+    if(target.closest("input,textarea,select,option,a,[contenteditable='true'],[data-c7-allow-focus]"))return;
+    if(target.closest(".shell"))event.preventDefault();
+  },true);
+}
+
 function normalizeCompletionTest(value){
   const source=value&&typeof value==="object"?value:{};
   const allowed=["not-run","running","completed","incomplete","stopped"];
@@ -1590,6 +1605,7 @@ $("c7TrainStart").addEventListener("click",()=>trainCork7("train-start"));
 $("c7TrainPause").addEventListener("click",()=>trainCork7("train-pause"));
 $("c7Stop").addEventListener("click",stopCork7);
 document.querySelectorAll("[data-c7key]").forEach(button=>button.addEventListener("click",()=>actCork7(button.dataset.c7key)));
+installGameFocusProtection();
 loadLocalTrainerCache();
 updateLocalTrainerDisplay();
 updateCompletionTestDisplay();

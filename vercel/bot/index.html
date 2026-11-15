@@ -663,7 +663,7 @@ async function tryEnterSolo(){
   }
   status=localReadStatus();
   if(status.phase==="lobby"||status.phase==="park-select"){
-    if(/\\bride\\b/.test(status.text.toLowerCase()))await localClickText("Ride");
+    if(/\bride\b/.test(status.text.toLowerCase()))await localClickText("Ride");
   }
   status=localReadStatus();
   if(status.phase==="park-select"||/apex/.test(status.text.toLowerCase())){
@@ -790,14 +790,16 @@ async function performLocalTakeoff(event){
   const grabDelay=Math.max(40,Math.min(260,Number(event.grabDelayMs)||90));
   const grabDuration=Math.max(250,Math.min(1000,Number(event.grabDurationMs)||430));
   const heldKeys=["Space",...trickKeys];
+  let trickReleaseAt=0;
   try{
-    // Load the pop, set the chosen in-game trick controls at the lip, then release Space.
+    // Load the pop, set trick controls at the lip, then release Space.
     dispatchLocalKey(ctx,"Space","keydown");localActiveKeys.add("Space");
     await localSleep(preload);
     if(!localTraining)return;
     for(const key of trickKeys){dispatchLocalKey(ctx,key,"keydown");localActiveKeys.add(key);}
     await localSleep(lead);
     dispatchLocalKey(ctx,"Space","keyup");localActiveKeys.delete("Space");
+    trickReleaseAt=Date.now()+duration;
     await localSleep(grabDelay);
     for(const grab of grabs){
       if(!localTraining)return;
@@ -806,10 +808,14 @@ async function performLocalTakeoff(event){
       dispatchLocalKey(ctx,grab,"keyup");localActiveKeys.delete(grab);
       await localSleep(55);
     }
-    const alreadyHeld=Date.now();
-    const elapsed=alreadyHeld;
-    void elapsed;
-    await localSleep(duration);
+    const remaining=trickReleaseAt-Date.now();
+    if(remaining>0)await localSleep(remaining);
+    for(const key of trickKeys){
+      if(localActiveKeys.has(key)){
+        dispatchLocalKey(ctx,key,"keyup");
+        localActiveKeys.delete(key);
+      }
+    }
   }finally{
     for(const key of [...heldKeys,...grabs]){
       if(localActiveKeys.has(key)){

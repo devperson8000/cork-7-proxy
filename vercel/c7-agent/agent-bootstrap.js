@@ -23,23 +23,38 @@
         ? { capture: value, once: false, passive: false, signal: null }
         : { capture: !!value?.capture, once: !!value?.once, passive: !!value?.passive, signal: value?.signal || null };
     }
-    function forget(target, type, listener, capture) {
-      for (const item of listeners) {
-        if (item.active && item.target === target && item.type === type &&
-            item.listener === listener && item.capture === capture) item.active = false;
-      }
+    function isDiagnostic(listener) {
+      try {
+        return listener?.__CORK7_DIAGNOSTIC__ === true ||
+          listener?.handleEvent?.__CORK7_DIAGNOSTIC__ === true;
+      } catch { return false; }
     }
-    function remember(target, type, listener, options) {
-      if (type !== "keydown" && type !== "keyup") return;
-      if (!(typeof listener === "function" || (listener && typeof listener.handleEvent === "function"))) return;
+    function validListener(listener) {
+      return typeof listener === "function" || (listener && typeof listener.handleEvent === "function");
+    }
+    function addTracked(target, type, listener, options) {
       const o = optionsOf(options);
-      if (o.signal?.aborted) return;
-      if (listeners.some(x => x.active && x.target === target && x.type === type &&
-          x.listener === listener && x.capture === o.capture)) return;
-      const item = { target, type, listener, capture:o.capture, once:o.once, passive:o.passive, signal:o.signal, active:true };
+      if (o.signal?.aborted) return Reflect.apply(nativeAdd, target, [type, listener, options]);
+      const existing = listeners.find(x => x.active && x.target === target && x.type === type &&
+        x.listener === listener && x.capture === o.capture);
+      // The DOM ignores duplicate listener/capture pairs, even when options differ.
+      if (existing) return;
+      const item = {
+        target, type, listener, capture:o.capture, once:o.once,
+        passive:o.passive, signal:o.signal, active:true, wrapped:null
+      };
+      item.wrapped = function(event) {
+        if (item.once) item.active = false;
+        if (typeof listener === "function") return Reflect.apply(listener, this, [event]);
+        return Reflect.apply(listener.handleEvent, listener, [event]);
+      };
+      const nativeOptions = typeof options === "boolean" ? options : options && typeof options === "object"
+        ? { capture:o.capture, once:o.once, passive:o.passive, ...(o.signal ? { signal:o.signal } : {}) }
+        : options;
+      Reflect.apply(nativeAdd, target, [type, item.wrapped, nativeOptions]);
       listeners.push(item);
       if (o.signal) {
-        try { o.signal.addEventListener("abort", () => forget(target, type, listener, o.capture), { once:true }); } catch {}
+        try { o.signal.addEventListener("abort", () => { item.active = false; }, { once:true }); } catch {}
       }
     }
 
@@ -47,18 +62,28 @@
       Object.defineProperty(proto, "addEventListener", {
         configurable:true, writable:true,
         value:function(type, listener, options) {
-          const result = Reflect.apply(nativeAdd, this, [type, listener, options]);
-          remember(this, String(type), listener, options);
-          return result;
+          const normalizedType = String(type);
+          if ((normalizedType === "keydown" || normalizedType === "keyup") && validListener(listener) && !isDiagnostic(listener)) {
+            return addTracked(this, normalizedType, listener, options);
+          }
+          return Reflect.apply(nativeAdd, this, [type, listener, options]);
         }
       });
       if (typeof nativeRemove === "function") {
         Object.defineProperty(proto, "removeEventListener", {
           configurable:true, writable:true,
           value:function(type, listener, options) {
-            const result = Reflect.apply(nativeRemove, this, [type, listener, options]);
-            if (type === "keydown" || type === "keyup") forget(this, String(type), listener, optionsOf(options).capture);
-            return result;
+            const normalizedType = String(type);
+            if (normalizedType === "keydown" || normalizedType === "keyup") {
+              const capture = optionsOf(options).capture;
+              const item = listeners.find(x => x.active && x.target === this && x.type === normalizedType &&
+                x.listener === listener && x.capture === capture);
+              if (item) {
+                item.active = false;
+                return Reflect.apply(nativeRemove, this, [type, item.wrapped, capture]);
+              }
+            }
+            return Reflect.apply(nativeRemove, this, [type, listener, options]);
           }
         });
       }
@@ -74,7 +99,7 @@
       };
       if (special[value]) return { key:special[value][0], code:special[value][1], keyCode:special[value][2] };
       const upper = value.toUpperCase();
-      return { key:value.toLowerCase(), code:"Key"+upper, keyCode:upper.charCodeAt(0) };
+      return { key:value.length === 1 ? value.toLowerCase() : value, code:value.length === 1 ? "Key"+upper : value, keyCode:upper.charCodeAt(0) };
     }
     function buildPath(target) {
       const path = [];
@@ -88,118 +113,77 @@
       path.push(win);
       return path;
     }
-    function invokeProperty(target, type, event, counts) {
-      try {
-        const fn = target && target["on"+type];
-        if (typeof fn === "function") {
-          Reflect.apply(fn, target, [event]);
-          counts.delivered++;
-        }
-      } catch (error) {
-        counts.errors++;
-        counts.firstError ||= String(error?.message || error).slice(0,160);
-      }
+    function pathCounts(path) {
+      const onPath = item => item.active && !item.signal?.aborted && path.includes(item.target);
+      const propertyCount = type => path.reduce((count,target)=>
+        count + (typeof target?.["on"+type] === "function" ? 1 : 0),0);
+      const keydown = listeners.filter(item=>item.type === "keydown" && onPath(item)).length + propertyCount("keydown");
+      const keyup = listeners.filter(item=>item.type === "keyup" && onPath(item)).length + propertyCount("keyup");
+      return { keydown, keyup };
     }
     function send(key, type, target) {
       if (type !== "keydown" && type !== "keyup") return { ok:false, delivered:0, error:"Unsupported event type." };
-      if (!target || !target.nodeType) return { ok:false, delivered:0, error:"No game canvas target." };
-
-      const info = keyInfo(key);
+      if (!target || typeof target.dispatchEvent !== "function") return { ok:false, delivered:0, error:"No game canvas target." };
       const path = buildPath(target);
-      const event = new win.KeyboardEvent(type, {
-        key:info.key, code:info.code, keyCode:info.keyCode, which:info.keyCode,
-        bubbles:true, cancelable:true, composed:true, view:win
-      });
-      const flags = { stopped:false, immediate:false, passive:false };
-      const counts = { delivered:0, errors:0, firstError:null };
-      let currentTarget = null, phase = 0;
-      const preventDefault = event.preventDefault.bind(event);
-      const nativeStopPropagation = event.stopPropagation.bind(event);
-      const nativeStopImmediatePropagation = event.stopImmediatePropagation.bind(event);
-      Object.defineProperties(event, {
-        target:{ configurable:true, get:()=>target },
-        srcElement:{ configurable:true, get:()=>target },
-        currentTarget:{ configurable:true, get:()=>currentTarget },
-        eventPhase:{ configurable:true, get:()=>phase },
-        composedPath:{ configurable:true, value:()=>path.slice() },
-        preventDefault:{ configurable:true, value:function(){ if(!flags.passive) preventDefault(); } },
-        stopPropagation:{ configurable:true, value:function(){ flags.stopped=true; nativeStopPropagation(); } },
-        stopImmediatePropagation:{ configurable:true, value:function(){ flags.stopped=true; flags.immediate=true; nativeStopImmediatePropagation(); } }
-      });
-
-      function invokeAt(node, capture, eventPhase) {
-        currentTarget = node;
-        phase = eventPhase;
-        flags.immediate = false;
-        const matching = listeners.filter(x => x.active && !x.signal?.aborted &&
-          x.type === type && x.target === node && x.capture === capture);
-        for (const item of matching) {
-          if (flags.immediate) break;
-          flags.passive = item.passive;
-          try {
-            if (typeof item.listener === "function") Reflect.apply(item.listener, node, [event]);
-            else Reflect.apply(item.listener.handleEvent, item.listener, [event]);
-            counts.delivered++;
-          } catch (error) {
-            counts.errors++;
-            counts.firstError ||= String(error?.message || error).slice(0,160);
-          } finally { flags.passive = false; }
-          if (item.once) {
-            try { Reflect.apply(nativeRemove, node, [type, item.listener, item.capture]); } catch {}
-            item.active = false;
-          }
-        }
-        if (!capture && !flags.immediate) invokeProperty(node, type, event, counts);
+      const counts = pathCounts(path);
+      const relevant = counts[type === "keydown" ? "keydown" : "keyup"];
+      if (!relevant) return { ok:false, delivered:0, error:"No matching game input listeners are registered on the canvas event path." };
+      const info = keyInfo(key);
+      let event;
+      let reachedTarget = false;
+      const targetAudit = () => { reachedTarget = true; };
+      try {
+        event = new win.KeyboardEvent(type, {
+          key:info.key, code:info.code, keyCode:info.keyCode, which:info.keyCode,
+          bubbles:true, cancelable:true, composed:true, view:win
+        });
+        // Observe whether native propagation actually reaches the canvas.
+        // Register outside the tracked list so this audit cannot unlock controls.
+        Reflect.apply(nativeAdd, target, [type, targetAudit, true]);
+        // Use the browser's own EventTarget dispatch algorithm. This preserves
+        // real capture/bubble ordering, currentTarget, once, AbortSignal,
+        // passive listeners, propagation and preventDefault semantics.
+        target.dispatchEvent(event);
+      } catch (error) {
+        return { ok:false, registeredOnPath:0, error:String(error?.message || error).slice(0,180), trusted:false };
+      } finally {
+        try { Reflect.apply(nativeRemove, target, [type, targetAudit, true]); } catch {}
       }
-
-      for (const node of path.slice().reverse()) {
-        invokeAt(node, true, node === target ? 2 : 1);
-        if (flags.stopped && node !== target) break;
-      }
-      if (!flags.stopped || path[0] === target) {
-        if (!flags.immediate) invokeAt(target, false, 2);
-        if (event.bubbles && !flags.stopped) {
-          for (const node of path.slice(1)) {
-            invokeAt(node, false, 3);
-            if (flags.stopped) break;
-          }
-        }
-      }
-      currentTarget = null;
-      phase = 0;
+      if (!reachedTarget) return {
+        ok:false, registeredOnPath:relevant,
+        error:"The keyboard event was stopped before reaching the game canvas.",
+        trusted:event.isTrusted, defaultPrevented:event.defaultPrevented
+      };
+      // Registered handlers and canvas arrival do not prove that the game
+      // acted on an untrusted event; a visible game-state change must confirm it.
       return {
-        ok:counts.delivered > 0,
-        delivered:counts.delivered,
-        errors:counts.errors,
-        firstError:counts.firstError,
-        defaultPrevented:event.defaultPrevented,
-        trusted:event.isTrusted,
-        key:info.key,
-        type
+        ok:true, registeredOnPath:relevant, reachedTarget:true,
+        defaultPrevented:event.defaultPrevented, trusted:event.isTrusted,
+        key:info.key, type, targetTag:String(target.tagName || "" ).toLowerCase()
       };
     }
 
     const agent = Object.freeze({
       version:VERSION,
       status() {
-        const down = listeners.filter(x => x.active && x.type === "keydown").length;
-        const up = listeners.filter(x => x.active && x.type === "keyup").length;
         const doc = win.document;
         const canvases = Array.from(doc.querySelectorAll("canvas"));
         canvases.sort((a,b) => {
           const ra=a.getBoundingClientRect(), rb=b.getBoundingClientRect();
           return rb.width*rb.height-ra.width*ra.height;
         });
-        const targets = new Set([win,doc,doc.documentElement,doc.body]);
-        if (canvases[0]) for (const target of buildPath(canvases[0])) targets.add(target);
-        const propertyKeydown = Array.from(targets).filter(x=>typeof x?.onkeydown==="function").length;
-        const propertyKeyup = Array.from(targets).filter(x=>typeof x?.onkeyup==="function").length;
+        const canvas = canvases[0] || null;
+        const path = canvas ? buildPath(canvas) : [];
+        const counts = pathCounts(path);
+        const visibleCanvas = !!canvas && (()=>{ const r=canvas.getBoundingClientRect(); return r.width>32 && r.height>32; })();
         return {
           ready:true, version:VERSION,
-          keydownCount:down+propertyKeydown,
-          keyupCount:up+propertyKeyup,
-          registeredKeydown:down, registeredKeyup:up,
-          propertyKeydown, propertyKeyup
+          canvasFound:!!canvas, visibleCanvas,
+          keydownCount:counts.keydown, keyupCount:counts.keyup,
+          registeredKeydown:counts.keydown, registeredKeyup:counts.keyup,
+          canSend:visibleCanvas && counts.keydown>0 && counts.keyup>0,
+          trustedHardwareEvents:false,
+          targetPath:path.map(node=>node===win?"window":node===doc?"document":String(node.nodeName||"node").toLowerCase())
         };
       },
       send

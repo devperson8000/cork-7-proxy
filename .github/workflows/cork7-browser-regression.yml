@@ -1,0 +1,55 @@
+name: Cork7 browser regression
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/cork7-browser-agent-rework]
+    paths:
+      - "vercel/c7-agent/**"
+      - "vercel/bot/index.html"
+      - "tests/cork7-agent/**"
+      - ".github/workflows/cork7-browser-regression.yml"
+  pull_request:
+    paths:
+      - "vercel/c7-agent/**"
+      - "vercel/bot/index.html"
+      - "tests/cork7-agent/**"
+      - ".github/workflows/cork7-browser-regression.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  browser-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install browser test dependencies
+        run: |
+          python -m pip install --upgrade pip playwright
+          python -m playwright install --with-deps chromium
+      - name: Check browser-agent JavaScript syntax
+        run: node --check vercel/c7-agent/agent-bootstrap.js
+      - name: Check dashboard inline JavaScript syntax
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          source = Path("vercel/bot/index.html").read_text()
+          scripts = re.findall(r"<script>(.*?)</script>", source, re.S)
+          if len(scripts) != 1:
+              raise SystemExit(f"Expected one dashboard inline script, found {len(scripts)}")
+          Path("/tmp/cork7-dashboard.js").write_text(scripts[0])
+          PY
+          node --check /tmp/cork7-dashboard.js
+      - name: Test native browser input and listener lifecycle
+        run: python tests/cork7-agent/agent-bootstrap.browser.test.py
+      - name: Test dashboard training, scores, evolution and checkpoint reload
+        run: python tests/cork7-agent/dashboard-training.e2e.test.py

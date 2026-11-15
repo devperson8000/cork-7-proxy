@@ -239,30 +239,32 @@ function renderCork7(data){
   const cpuLimit=Number(resources.cpuLimitCores);
   const resourceBlocked=!Number.isFinite(memoryLimit)||memoryLimit<1024||
     (Number.isFinite(cpuLimit)&&cpuLimit<0.25);
-  $("c7Phase").textContent=starting?"STARTING":data.connected?String(data.phase||"CONNECTED").toUpperCase():(data.lastError?"START FAILED":"NOT CONNECTED");
-  $("c7SessionStatus").textContent=starting
-    ?"Chromium is starting and Cork7 is loading. The dashboard will keep checking the worker."
-    :data.connected
-      ?"Connected to "+data.site+" · "+data.mode+" · "+data.park
-      :data.lastError
-        ?"Cork7 launch failed: "+data.lastError
-        :resourceBlocked
-          ?"Northflank's small worker is now used for coordination and checkpoints. The Cork7 browser and training loop are intended to run locally in this page on your computer."
-          :"No active Cork7 browser session is connected.";
-  $("c7Start").disabled=starting;
-  $("c7Details").textContent="Score detected: "+(data.score==null?"not readable yet":Number(data.score).toLocaleString())+" · canvas: "+(data.canvasCount||0)+" · actions: "+(data.actionCount||0)+" · "+(data.lastAction||"");
-  const trainer=data.trainer||{};
-  $("c7TrainerStats").textContent="AI "+(trainer.training?"TRAINING":"PAUSED")+" · Generation "+(trainer.generation||1)+" · Runs "+(trainer.runsFinished||0)+" · Best Cork7 score "+(trainer.bestScore==null?"—":Number(trainer.bestScore).toLocaleString())+(trainer.coachProfile?" · Coach profile active":" · No player coach profile yet");
-  const memoryLine=resources.containerMemoryMb==null
-    ?"Container RAM: unavailable"
-    :"Container RAM: "+resources.containerMemoryMb+" / "+(resources.containerMemoryLimitMb==null?"unknown":resources.containerMemoryLimitMb)+" MB";
-  const processLine="Worker RSS: "+(resources.processRssMb==null?"—":resources.processRssMb+" MB")+
-    " · CPU quota: "+(resources.cpuLimitCores==null?"—":resources.cpuLimitCores+" vCPU")+
-    " · OOM kills: "+(resources.oomKills==null?"—":resources.oomKills)+
-    " · CPU throttled: "+(resources.cpuThrottledSeconds==null?"—":resources.cpuThrottledSeconds+" s");
-  const buildLine="Worker build: "+(data.workerBuild||"version not reported");
-  $("c7PageText").textContent=buildLine+"\n"+memoryLine+"\n"+processLine+"\n\n"+
-    (data.lastError?"ERROR: "+data.lastError+"\n\n":"")+(data.pageText||"No visible page text.");
+  const localViewActive=localGameLoaded||localTraining||completionTestRunning||localTrainerCacheFound;
+  if(!localViewActive){
+    $("c7Phase").textContent=starting?"STARTING":data.connected?String(data.phase||"CONNECTED").toUpperCase():(data.lastError?"START FAILED":"NOT CONNECTED");
+    $("c7SessionStatus").textContent=starting
+      ?"Chromium is starting and Cork7 is loading. The dashboard will keep checking the worker."
+      :data.connected
+        ?"Connected to "+data.site+" · "+data.mode+" · "+data.park
+        :data.lastError
+          ?"Cork7 launch failed: "+data.lastError
+          :resourceBlocked
+            ?"Northflank is used for coordination and optional checkpoints. The actual Cork7 game and training loop run in this browser page."
+            :"No active remote Cork7 browser session is connected.";
+    const trainer=data.trainer||{};
+    $("c7TrainerStats").textContent="Remote worker · AI "+(trainer.training?"TRAINING":"PAUSED")+" · Generation "+(trainer.generation||1)+" · Runs "+(trainer.runsFinished||0)+" · Best Cork7 score "+(trainer.bestScore==null?"—":Number(trainer.bestScore).toLocaleString())+(trainer.coachProfile?" · Coach profile active":" · No player coach profile yet");
+    const memoryLine=resources.containerMemoryMb==null
+      ?"Container RAM: unavailable"
+      :"Container RAM: "+resources.containerMemoryMb+" / "+(resources.containerMemoryLimitMb==null?"unknown":resources.containerMemoryLimitMb)+" MB";
+    const processLine="Worker RSS: "+(resources.processRssMb==null?"—":resources.processRssMb+" MB")+
+      " · CPU quota: "+(resources.cpuLimitCores==null?"—":resources.cpuLimitCores+" vCPU")+
+      " · OOM kills: "+(resources.oomKills==null?"—":resources.oomKills)+
+      " · CPU throttled: "+(resources.cpuThrottledSeconds==null?"—":resources.cpuThrottledSeconds+" s");
+    const buildLine="Worker build: "+(data.workerBuild||"version not reported");
+    $("c7PageText").textContent=buildLine+"\n"+memoryLine+"\n"+processLine+"\n\n"+
+      (data.lastError?"ERROR: "+data.lastError+"\n\n":"")+(data.pageText||"No visible page text.");
+  }
+  $("c7Start").disabled=starting||localGameLoaded||localGameLoading;
   // The live game is rendered locally in the embedded /c7 player, not as a remote screenshot.
   refreshOwnerControls();
 }
@@ -485,6 +487,7 @@ let localRideConfirmed=false;
 let localTraining=false;
 let completionTestRunning=false;
 let remoteCompletionSyncAvailable=false;
+let localTrainerSyncConfirmed=false;
 let localCompletion={attempts:0,completedRuns:0,lastOutcome:"not-run",lastAt:null,baseline:null,history:[]};
 let localTrainer={generation:1,runsFinished:0,bestScore:null,bestPolicy:null,history:[]};
 let localCurrentPolicy="";
@@ -653,8 +656,13 @@ function diagAttachGameFrame(ctx){
     });
   };
   ["keydown","keyup","keypress"].forEach(type=>{
-    ctx.win.addEventListener(type,event=>keyEvent(event,"capture"),true);
-    ctx.doc.addEventListener(type,event=>keyEvent(event,"bubble"),false);
+    const captureHandler=event=>keyEvent(event,"capture");
+    const bubbleHandler=event=>keyEvent(event,"bubble");
+    // Diagnostics observe input but must never make the game look controllable.
+    captureHandler.__CORK7_DIAGNOSTIC__=true;
+    bubbleHandler.__CORK7_DIAGNOSTIC__=true;
+    ctx.win.addEventListener(type,captureHandler,true);
+    ctx.doc.addEventListener(type,bubbleHandler,false);
   });
   ["focus","blur"].forEach(type=>{
     ctx.win.addEventListener(type,()=>diagRecord("game-window-"+type,diagFocusInfo(ctx)),true);
@@ -1066,7 +1074,7 @@ function renderLocalStatus(status){
   $("c7Details").textContent="LOCAL COMPUTER · "+status.phase.toUpperCase()+
     " · Score "+(status.score==null?"not readable yet":status.score.toLocaleString())+
     " · Canvas "+status.canvasCount+
-    (status.inputAgent?" · Key handlers "+status.inputAgent.keydownCount+"/"+status.inputAgent.keyupCount:" · Input agent pending")+
+    (status.inputAgent?" · Game-path key handlers "+status.inputAgent.keydownCount+"/"+status.inputAgent.keyupCount+(status.inputAgent.canSend?" · synthetic input path ready":" · input path not ready"):" · Input agent pending")+
     (status.canvasSize?" · "+status.canvasSize.width+"×"+status.canvasSize.height:"");
   $("c7PageText").textContent="LOCAL GAME DIAGNOSTICS\nPage: "+status.title+
     "\nPhase: "+status.phase+
@@ -1074,6 +1082,7 @@ function renderLocalStatus(status){
     "\nCanvas: "+(status.canvasSize?status.canvasSize.width+"×"+status.canvasSize.height:"none")+
     "\nActive element: "+status.activeElement+
     "\nGame frame: "+status.frameUrl+
+    "\nSynthetic keyboard events: untrusted (browser limitation)"+
     "\nLast bot input: "+(localLastAction||"none")+
     "\n\n"+status.text;
   refreshOwnerControls();
@@ -1088,15 +1097,28 @@ async function waitForLocalGame(timeoutMs=60000){
   $("c7ScreenEmpty").hidden=true;
   const start=Date.now();
   let lastMessage="";
+  let lastBootReason="";
   while(Date.now()-start<timeoutMs){
     try{
       const status=localReadStatus();
-      if(status.canvasCount>0||status.text.length>0)return status;
-    }catch(error){lastMessage=error.message;}
+      const frameUrl=String(status.frameDocumentUrl||"");
+      const frameNavigated=!!frameUrl&&!/^about:(blank|srcdoc)$/i.test(frameUrl);
+      const boot=status.ctx.playerDoc.defaultView?.__CORK7_AGENT_BOOT_STATUS__;
+      if(boot?.ready===false&&boot.reason)lastBootReason=String(boot.reason);
+      // The player's static "Preparing…" placeholder is not game readiness.
+      // Wait until the actual proxy document has navigated and the Cork7 hook
+      // has installed inside that document (or a visible game canvas exists).
+      if(frameNavigated&&(status.inputAgent?.ready||status.canvasCount>0))return status;
+      if(frameNavigated&&lastBootReason&&Date.now()-start>2500)throw new Error(lastBootReason);
+    }catch(error){
+      lastMessage=error.message;
+      if(lastBootReason&&Date.now()-start>2500)throw new Error(lastBootReason);
+    }
     await localSleep(500);
   }
+  if(lastBootReason)throw new Error("The Cork7 input hook did not attach: "+lastBootReason);
   if(lastMessage)throw new Error(lastMessage);
-  throw new Error("Cork7 did not finish loading in the local browser frame. Check the game panel and press Refresh view.");
+  throw new Error("Cork7 did not finish loading in the embedded game frame. The player placeholder alone does not count as ready. Check the game panel and try Refresh view.");
 }
 function findLocalTextTarget(ctx,label){
   const candidates=ctx.doc.querySelectorAll("button,[role='button'],a,[tabindex],div,span");
@@ -1152,10 +1174,10 @@ async function startCork7(){
     const latest=localReadStatus();
     renderLocalStatus(latest||ready);
     const input=latest?.inputAgent;
-    $("c7SessionStatus").textContent=input?.ready
-      ?"Cork7 loaded. Browser input hook attached: "+input.keydownCount+" keydown / "+input.keyupCount+" keyup handlers. If the menu remains, enter Solo → APEX → Ride Solo, then confirm the active run."
-      :"Cork7 loaded, but game keyboard handlers were not detected. The bot will not start until a usable control path is found.";
-    $("c7ControlStatus").textContent="Browser agent: "+(input?.ready?input.keydownCount+" keydown / "+input.keyupCount+" keyup handlers":"not ready")+". Enter an actual APEX Solo run and confirm it before testing controls.";
+    $("c7SessionStatus").textContent=input?.canSend
+      ?"Cork7 loaded. Game-path keyboard handlers are detected. Inputs will be synthetic and untrusted; the game must visibly respond before training can be trusted. Enter Solo → APEX → Ride Solo, then confirm the active run."
+      :"Cork7 loaded, but no usable keyboard handler path is visible on the game canvas. Controls remain locked.";
+    $("c7ControlStatus").textContent="Browser agent: "+(input?.canSend?input.keydownCount+" keydown / "+input.keyupCount+" keyup handlers on canvas path":"no verified canvas input path")+". Events are synthetic/untrusted. Confirm an actual APEX Solo ride before testing.";
     startLocalStatusPolling();
   }catch(error){
     localPageError=error.message;
@@ -1185,6 +1207,11 @@ async function observeCork7(){
     $("c7Details").dataset.worker="online";
   }catch(error){
     $("c7Details").dataset.worker="offline";
+    remoteCompletionSyncAvailable=false;
+    localTrainerSyncConfirmed=false;
+    trainerSyncFingerprint="";
+    updateLocalTrainerDisplay();
+    updateCompletionTestDisplay();
     $("c7Details").textContent="Checkpoint worker unavailable. Local runs can continue; sync will retry: "+error.message;
   }
   if(localGameLoaded){
@@ -1217,10 +1244,12 @@ function dispatchLocalKey(ctx,key,type){
     throw new Error(boot?.reason||"Cork7's early browser input agent is not attached. Refresh the player and check its status.");
   }
   if(!canvas)throw new Error("No visible Cork7 game canvas was found inside the embedded game frame.");
+  const inputStatus=agent.status?.();
+  if(!inputStatus?.canSend)throw new Error("No active keyboard handler path was found on the game canvas. The dashboard will not send an input it cannot route to the game.");
   const result=agent.send(key,type,canvas);
   diagRecord("game-agent-input",{
     key:String(key),type:String(type),
-    delivered:result?.delivered||0,errors:result?.errors||0,
+    registeredOnPath:result?.registeredOnPath||0,errors:result?.errors||0,
     trusted:result?.trusted===true,defaultPrevented:!!result?.defaultPrevented
   });
   if(!result||!result.ok){
@@ -1323,13 +1352,13 @@ function confirmLocalRide(){
   if(status.canvasCount===0||status.phase==="lobby"||status.phase==="park-select"||status.phase==="loading"||status.phase==="results"){
     throw new Error("Cork7 is not showing an active ride. Enter Solo → APEX → Ride Solo and reach the actual mountain before confirming.");
   }
-  if(!status.inputAgent?.ready||status.inputAgent.keydownCount<1||status.inputAgent.keyupCount<1){
-    throw new Error("The browser agent has not detected both keydown and keyup handlers inside Cork7. Controls remain locked.");
+  if(!status.inputAgent?.canSend){
+    throw new Error("The browser agent has not detected both keydown and keyup handlers on the visible game canvas path. Controls remain locked.");
   }
   localRideConfirmed=true;
   diagRecord("ride-confirmed",{phase:status.phase,canvasCount:status.canvasCount,focus:diagFocusInfo(status.ctx)});
-  $("c7ControlStatus").textContent="Active ride confirmed by owner. Manual input, no-trick test and score training controls are now unlocked. Clear this confirmation if you return to a menu.";
-  $("c7SessionStatus").textContent="Active APEX ride confirmed. No automatic input has been sent.";
+  $("c7ControlStatus").textContent="Active ride confirmed by owner. Browser inputs are synthetic/untrusted; verify visible game response before trusting a score-training run. Clear this confirmation if you return to a menu.";
+  $("c7SessionStatus").textContent="Active APEX ride confirmed. No automatic input has been sent. Synthetic event mode is active.";
   refreshOwnerControls();
   updateLocalTrainerDisplay();
   updateCompletionTestDisplay();
@@ -1484,65 +1513,6 @@ function localHash(value){
   for(let i=0;i<textValue.length;i++){hash^=textValue.charCodeAt(i);hash=Math.imul(hash,16777619);}
   return (hash>>>0).toString(16);
 }
-async function localReadSavedScores(ctx){
-  const output=[];
-  const scoreKey=/(score|points|totalScore|runScore)/i;
-  const seen=new Set();
-  function walk(value,source,path,depth){
-    if(value==null||depth>5)return;
-    if(typeof value==="object"){
-      if(seen.has(value))return;
-      seen.add(value);
-      if(Array.isArray(value)){
-        for(let i=0;i<Math.min(value.length,80);i++)walk(value[i],source,path+"["+i+"]",depth+1);
-        return;
-      }
-      for(const [key,child] of Object.entries(value).slice(0,100)){
-        if(scoreKey.test(key)&&((typeof child==="number")||(typeof child==="string"))){
-          const n=typeof child==="number"?child:Number(String(child).replace(/,/g,""));
-          if(Number.isSafeInteger(n)&&n>=0&&n<=100000000){
-            output.push({score:n,source,path:path+"."+key,signature:localHash(value)});
-          }
-        }else if(child&&typeof child==="object")walk(child,source,path+"."+key,depth+1);
-      }
-    }
-  }
-  try{
-    const storage=ctx.win.localStorage;
-    for(let i=0;i<Math.min(storage.length,220);i++){
-      const key=storage.key(i)||"";
-      const raw=storage.getItem(key)||"";
-      if(raw.length>250000)continue;
-      try{walk(JSON.parse(raw),"localStorage",key,0);}catch{}
-    }
-  }catch{}
-  try{
-    if(ctx.win.indexedDB?.databases){
-      const databases=(await ctx.win.indexedDB.databases()).slice(0,8);
-      for(const metadata of databases){
-        if(!metadata.name)continue;
-        const db=await new Promise((resolve,reject)=>{
-          const request=ctx.win.indexedDB.open(metadata.name);
-          request.onsuccess=()=>resolve(request.result);
-          request.onerror=()=>reject(request.error||new Error("IndexedDB open failed"));
-          request.onblocked=()=>reject(new Error("IndexedDB open blocked"));
-        });
-        try{
-          for(const storeName of Array.from(db.objectStoreNames).slice(0,12)){
-            const records=await new Promise((resolve,reject)=>{
-              const tx=db.transaction(storeName,"readonly");
-              const request=tx.objectStore(storeName).getAll(undefined,100);
-              request.onsuccess=()=>resolve(request.result||[]);
-              request.onerror=()=>reject(request.error||new Error("IndexedDB read failed"));
-            });
-            walk(records,"indexedDB",metadata.name+"."+storeName,0);
-          }
-        }finally{db.close();}
-      }
-    }
-  }catch{}
-  return output;
-}
 async function runLocalPolicy(policy){
   let status=localReadStatus();
   if(!localRideConfirmed)throw new Error("Confirm the active APEX Solo ride before score training.");
@@ -1550,14 +1520,15 @@ async function runLocalPolicy(policy){
     throw new Error("The embedded Cork7 frame is not confirmed as an active ride. No training keys were sent.");
   }
   $("c7SessionStatus").textContent="Starting a repeatable trial: restart the current run, then skip the gondola…";
-  const scoresBefore=await localReadSavedScores(status.ctx);
-  const beforeSignatures=new Set(scoresBefore.map(item=>item.signature+"|"+item.path+"|"+item.score));
   await holdLocalKeys(["r"],2100);
   await localSleep(900);
   await holdLocalKeys(["f"],220);
   await localSleep(1300);
   status=localReadStatus();
-  if(status.canvasCount===0||status.phase==="lobby"||status.phase==="park-select"||status.phase==="loading")throw new Error("Cork7 did not return to an active ride after restart. No training score was saved.");
+  if(status.canvasCount===0||status.phase==="lobby"||status.phase==="park-select"||status.phase==="loading"||status.phase==="results"){
+    throw new Error("Cork7 did not leave the previous results/menu state after restart. No new run or score was recorded.");
+  }
+  if(!status.inputAgent?.canSend)throw new Error("The game input path is no longer ready after restart. Training paused without recording a score.");
   const started=Date.now();
   for(let index=0;index<policy.events.length;index++){
     const event=policy.events[index];
@@ -1580,19 +1551,10 @@ async function runLocalPolicy(policy){
   if(status.phase!=="results"){
     throw new Error("The game did not expose a results screen within 210 seconds. No score was guessed or recorded.");
   }
-  let score=status.score;
-  let scoreSource=score==null?null:"visible game text";
+  const score=status.score;
+  const scoreSource=score==null?null:"visible current Results screen";
   if(score==null){
-    const scoresAfter=await localReadSavedScores(status.ctx);
-    const changed=scoresAfter.filter(item=>!beforeSignatures.has(item.signature+"|"+item.path+"|"+item.score));
-    if(changed.length){
-      const candidate=changed[changed.length-1];
-      score=candidate.score;
-      scoreSource="new saved run record: "+candidate.source+" / "+candidate.path;
-    }
-  }
-  if(score==null){
-    throw new Error("Cork7 reached its results screen, but the current score was not exposed in readable game text or a newly changed browser save record. Training paused rather than inventing a result.");
+    throw new Error("Cork7 reached its Results screen, but the current run score is not exposed in readable page text. Training paused rather than reading unrelated storage or guessing a result.");
   }
   return {score,scoreSource,policy,capturedAt:new Date().toISOString()};
 }
@@ -1603,7 +1565,7 @@ function updateLocalTrainerDisplay(){
     " · Best actual score "+(localTrainer.bestScore==null?"—":localTrainer.bestScore.toLocaleString())+
     " · Best strategy "+(localTrainer.bestPolicy?.name||"not measured yet")+
     " · Run completion baseline "+(localCompletion.baseline?"verified":"not verified")+
-    " · Browser checkpoint saved"+(ownerAuthorized?" · Northflank sync enabled":" · remote sync locked");
+    " · Browser checkpoint saved"+(ownerAuthorized?(localTrainerSyncConfirmed?" · Northflank sync confirmed":" · Northflank sync pending"):" · remote sync locked");
   const strategy=$("c7CurrentStrategy");
   if(strategy)strategy.textContent=localTraining
     ?"Current strategy: "+(localCurrentPolicy||"preparing")
@@ -1632,7 +1594,7 @@ function updateCompletionTestDisplay(){
 }
 async function syncLocalTrainer(){
   saveLocalTrainerCache();
-  if(!ownerAuthorized)return false;
+  if(!ownerAuthorized){localTrainerSyncConfirmed=false;return false;}
   const payload={
     training:localTraining,
     generation:localTrainer.generation,
@@ -1648,6 +1610,7 @@ async function syncLocalTrainer(){
   trainerSyncInFlight=(async()=>{
     try{
       const synced=await api("cork7-client-training","POST",payload);
+      localTrainerSyncConfirmed=!!synced?.trainer;
       remoteCompletionSyncAvailable=!!synced?.trainer?.completionTest;
       trainerSyncFingerprint=fingerprint;
       $("c7Details").dataset.worker="online";
@@ -1655,6 +1618,11 @@ async function syncLocalTrainer(){
       return true;
     }catch(error){
       $("c7Details").dataset.worker="offline";
+      localTrainerSyncConfirmed=false;
+      remoteCompletionSyncAvailable=false;
+      trainerSyncFingerprint="";
+      updateLocalTrainerDisplay();
+      updateCompletionTestDisplay();
       $("c7SessionStatus").textContent="Checkpoint saved in this browser. Northflank sync will retry: "+error.message;
       return false;
     }finally{
@@ -1790,9 +1758,12 @@ async function startLocalTraining(){
   if(!localGameLoaded)await startCork7();
   const status=localReadStatus();
   if(!localRideConfirmed)throw new Error("Confirm the active APEX Solo ride first. No trainer keys will be sent while the game is on a menu.");
-  if(status.canvasCount===0||status.phase==="lobby"||status.phase==="park-select"||status.phase==="loading"||status.phase==="results"){
-    throw new Error("Start a fresh APEX Solo ride, then confirm the active run before starting the trainer.");
+  if(status.canvasCount===0||status.phase==="lobby"||status.phase==="park-select"||status.phase==="loading"){
+    throw new Error("Return to the APEX Solo game, then confirm the active run before starting the trainer.");
   }
+  // A verified no-trick baseline naturally ends on the results screen. The
+  // first training policy already restarts from that screen, so do not make
+  // users perform a redundant manual restart before the trainer can begin.
   if(localTraining)return;
   localTraining=true;
   updateLocalTrainerDisplay();
@@ -1903,7 +1874,10 @@ $("ownerLogout").addEventListener("click",logoutOwner);
 $("ownerPasscode").addEventListener("keydown",event=>{if(event.key==="Enter")loginOwner();});
 ["startBtn","pauseBtn","resumeBtn","resetBtn"].forEach(id=>$(id).dataset.ownerOnly="1");
 $("c7Start").addEventListener("click",startCork7);
-$("c7ConfirmRide").addEventListener("click",()=>confirmLocalRide());
+$("c7ConfirmRide").addEventListener("click",()=>{
+  try{confirmLocalRide();}
+  catch(error){$("c7SessionStatus").textContent="Could not confirm ride: "+error.message;setOwnerStatus(error.message,true);}
+});
 $("c7Observe").addEventListener("click",observeCork7);
 $("c7Restart").addEventListener("click",restartCork7);
 $("c7TestStart").addEventListener("click",()=>runNoTrickCompletionTest().catch(error=>{

@@ -498,7 +498,8 @@ let trainerSyncInFlight=null;
 
 const C7_DIAG_LIMIT=300;
 let c7DiagEvents=[];
-let c7DiagWindows=new WeakSet();
+let c7DiagDocuments=new WeakSet();
+let c7DiagFrames=new WeakSet();
 let c7DiagLastPhase=null;
 let c7DiagInstalled=false;
 
@@ -632,8 +633,10 @@ function diagObserveStatus(status){
   }
 }
 function diagAttachGameFrame(ctx){
-  if(!ctx||!ctx.win||!ctx.doc||c7DiagWindows.has(ctx.win))return;
-  c7DiagWindows.add(ctx.win);
+  // A WindowProxy survives navigation, but listeners attached to its old Document do not.
+  // Key the guard by the actual Document so the next Cork7 document receives fresh listeners.
+  if(!ctx||!ctx.win||!ctx.doc||c7DiagDocuments.has(ctx.doc))return;
+  c7DiagDocuments.add(ctx.doc);
   const keyEvent=(event,stage)=>{
     if(diagIsEditable(event.target))return;
     diagRecord("game-key-"+stage,{
@@ -662,7 +665,16 @@ function diagAttachGameFrame(ctx){
       focus:diagFocusInfo(ctx)
     }),true);
   });
-  ctx.frame.addEventListener("load",()=>diagRecord("game-frame-load",{src:diagSafePath(ctx.frame.src)}));
+  if(ctx.frame&&!c7DiagFrames.has(ctx.frame)){
+    c7DiagFrames.add(ctx.frame);
+    ctx.frame.addEventListener("load",()=>{
+      diagRecord("game-frame-load",{src:diagSafePath(ctx.frame.src)});
+      try{diagAttachGameFrame(getLocalGameContext());}
+      catch(error){
+        diagRecord("game-frame-attach-error",{message:String(error&&error.message||error).slice(0,160)});
+      }
+    });
+  }
   diagRecord("game-frame-attached",diagFocusInfo(ctx));
 }
 function diagReport(){

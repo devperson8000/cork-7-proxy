@@ -15,6 +15,34 @@ const KEY_ALIASES = new Map([
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const cleanText = value => String(value || "").replace(/\s+/g, " ").trim().slice(0, 4500);
+function normalizeCompletionTest(value) {
+  const source = value && typeof value === "object" ? value : {};
+  const outcomes = ["not-run", "running", "completed", "incomplete", "stopped"];
+  const baseline = source.baseline && source.baseline.mode === "no-tricks" && typeof source.baseline.completedAt === "string"
+    ? {
+        mode: "no-tricks",
+        completedAt: source.baseline.completedAt.slice(0, 40),
+        elapsedMs: Math.max(0, Math.floor(Number(source.baseline.elapsedMs) || 0)),
+        source: "actual-results-screen"
+      }
+    : null;
+  const history = Array.isArray(source.history) ? source.history.slice(-12).filter(item =>
+    item && ["completed", "incomplete", "stopped"].includes(item.outcome) && typeof item.at === "string"
+  ).map(item => ({
+    outcome: item.outcome,
+    at: item.at.slice(0, 40),
+    elapsedMs: Math.max(0, Math.floor(Number(item.elapsedMs) || 0)),
+    detail: String(item.detail || "").slice(0, 180)
+  })) : [];
+  return {
+    attempts: Math.max(0, Math.min(1000000, Math.floor(Number(source.attempts) || 0))),
+    completedRuns: Math.max(0, Math.min(1000000, Math.floor(Number(source.completedRuns) || 0))),
+    lastOutcome: outcomes.includes(source.lastOutcome) ? source.lastOutcome : "not-run",
+    lastAt: typeof source.lastAt === "string" ? source.lastAt.slice(0, 40) : null,
+    baseline,
+    history
+  };
+}
 
 function detectScore(text) {
   const patterns = [
@@ -58,7 +86,14 @@ export class Cork7Agent {
     this.trainingTask = null;
     this.coachProfile = null;
     this.stateFile = path.join(process.env.DATA_DIR || "/data", "cork7-training.json");
-    this.trainer = { generation: 1, runsFinished: 0, bestScore: null, bestPolicy: null, history: [] };
+    this.trainer = {
+      generation: 1,
+      runsFinished: 0,
+      bestScore: null,
+      bestPolicy: null,
+      history: [],
+      completionTest: normalizeCompletionTest(null)
+    };
   }
 
   async restoreTrainer() {
@@ -70,7 +105,8 @@ export class Cork7Agent {
           runsFinished: Number(value.runsFinished) || 0,
           bestScore: Number.isFinite(value.bestScore) ? value.bestScore : null,
           bestPolicy: value.bestPolicy || null,
-          history: Array.isArray(value.history) ? value.history.slice(-80) : []
+          history: Array.isArray(value.history) ? value.history.slice(-80) : [],
+          completionTest: normalizeCompletionTest(value.completionTest)
         };
         this.coachProfile = value.coachProfile || null;
       }
@@ -95,6 +131,7 @@ export class Cork7Agent {
       bestScore: this.trainer.bestScore,
       bestPolicy: this.trainer.bestPolicy,
       history: this.trainer.history.slice(-12),
+      completionTest: normalizeCompletionTest(this.trainer.completionTest),
       coachProfile: this.coachProfile ? {
         park: this.coachProfile.park,
         targetCleanLandingRate: this.coachProfile.targetCleanLandingRate,
@@ -131,6 +168,7 @@ export class Cork7Agent {
           capturedAt: String(item.capturedAt || new Date().toISOString()).slice(0, 40)
         }))
       : [];
+    this.trainer.completionTest = normalizeCompletionTest(input.completionTest);
     await this.saveTrainer();
     this.lastAction = this.training
       ? "Browser-based Cork7 training is active on the owner's computer"

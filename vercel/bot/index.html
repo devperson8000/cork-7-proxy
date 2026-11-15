@@ -80,11 +80,8 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
           <button class="btn" id="c7Restart" data-owner-only disabled>Restart run</button>
           <button class="btn danger" id="c7Stop" data-owner-only disabled>Close local game</button>
         </div>
-        <div class="panel-meta">INPUT SAFETY / ACTIVE RIDE CONFIRMATION</div>
-        <div class="realgame-controls">
-          <button class="btn" id="c7ConfirmRide" data-owner-only disabled>Confirm active APEX run</button>
-        </div>
-        <div class="realgame-status" id="c7ControlStatus">Open Cork7 and enter an actual APEX Solo ride first. Confirm it here before any bot or manual control can send a key. The dashboard will not click through menus.</div>
+        <div class="panel-meta">AUTOMATIC MENU HANDLING</div>
+        <div class="realgame-status" id="c7ControlStatus">No manual ride confirmation is needed. Enter an APEX Solo ride in the player. Each Run Bot or Test Bot start sends Escape first to close Cork7's pause menu, then checks that the game is ready.</div>
         <div class="panel-meta">NORMAL GAME INPUTS / EXPERIMENTAL CONTROL</div>
         <div class="realgame-controls">
           <button class="btn" data-c7key="a" data-owner-only disabled>A</button><button class="btn" data-c7key="d" data-owner-only disabled>D</button>
@@ -110,7 +107,7 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
           <button class="btn primary" id="c7TestStart" data-owner-only>Test Bot · No Tricks</button>
           <button class="btn" id="c7TestStop" data-owner-only disabled>Stop test</button>
         </div>
-        <div class="realgame-status" id="c7CompletionStats" aria-live="polite">No completion test yet. Confirm an active APEX ride first; the bot will only send F once for the gondola, then wait hands-off for Cork7's results screen.</div>
+        <div class="realgame-status" id="c7CompletionStats" aria-live="polite">No completion test yet. Enter APEX Solo in Cork7, then Test Bot sends Escape first to close any pause menu before it sends F once for the gondola.</div>
         <div class="panel-meta">REAL-GAME SCORE TRAINER / EXPERIMENTAL</div>
         <div class="realgame-controls">
           <button class="btn primary" id="c7TrainStart" data-owner-only disabled>Start AI trainer</button>
@@ -483,7 +480,6 @@ async function playReplay(){
 let ownerAuthorized=false;
 let localGameLoading=false;
 let localGameLoaded=false;
-let localRideConfirmed=false;
 let localTraining=false;
 let completionTestRunning=false;
 let remoteCompletionSyncAvailable=false;
@@ -610,7 +606,6 @@ function diagSnapshot(reason){
       ownerAuthorized:ownerAuthorized,
       localGameLoading:localGameLoading,
       localGameLoaded:localGameLoaded,
-      localRideConfirmed:localRideConfirmed,
       localTraining:localTraining,
       completionTestRunning:completionTestRunning,
       lastAction:String(localLastAction||"").slice(0,140)
@@ -938,12 +933,11 @@ function setOwnerStatus(message,isError=false){
 function refreshOwnerControls(){
   const state={
     c7Start:localGameLoading||localGameLoaded,
-    c7ConfirmRide:localTraining||completionTestRunning,
-    c7Restart:!localRideConfirmed||localTraining||completionTestRunning,
+    c7Restart:!localGameLoaded||localTraining||completionTestRunning,
     c7Stop:!localGameLoaded||completionTestRunning,
-    c7TestStart:localGameLoading||!localRideConfirmed||localTraining||completionTestRunning,
+    c7TestStart:localGameLoading||!localGameLoaded||localTraining||completionTestRunning,
     c7TestStop:!completionTestRunning,
-    c7TrainStart:!localGameLoaded||!localRideConfirmed||localTraining||completionTestRunning||!localCompletion.baseline,
+    c7TrainStart:!localGameLoaded||localTraining||completionTestRunning||!localCompletion.baseline,
     c7TrainPause:!localTraining
   };
   for(const [id,disabled] of Object.entries(state)){
@@ -952,11 +946,9 @@ function refreshOwnerControls(){
   }
   for(const node of document.querySelectorAll("[data-owner-only]")){
     const stateDisabled=node.dataset.ownerStateDisabled==="1";
-    const localKey=node.hasAttribute("data-c7key")&&!localRideConfirmed;
+    const localKey=node.hasAttribute("data-c7key")&&!localGameLoaded;
     node.disabled=!ownerAuthorized||stateDisabled||localKey;
   }
-  const confirmButton=$("c7ConfirmRide");
-  if(confirmButton)confirmButton.textContent=localRideConfirmed?"Ride confirmed ✓ · Clear":"Confirm active APEX run";
   $("ownerLogin").hidden=ownerAuthorized;
   $("ownerPasscode").hidden=ownerAuthorized;
   $("ownerLogout").hidden=!ownerAuthorized;
@@ -1180,15 +1172,14 @@ async function startCork7(){
   $("c7SessionStatus").textContent="Opening the Cork7 player on this computer…";
   try{
     const ready=await waitForLocalGame();
-    localRideConfirmed=false;
-    await tryEnterSolo();
+      await tryEnterSolo();
     const latest=localReadStatus();
     renderLocalStatus(latest||ready);
     const input=latest?.inputAgent;
     $("c7SessionStatus").textContent=input?.canSend
-      ?"Cork7 loaded. Game-path keyboard handlers are detected. Inputs will be synthetic and untrusted; the game must visibly respond before training can be trusted. Enter Solo → APEX → Ride Solo, then confirm the active run."
-      :"Cork7 loaded, but no usable keyboard handler path is visible on the game canvas. Controls remain locked.";
-    $("c7ControlStatus").textContent="Browser agent: "+(input?.canSend?input.keydownCount+" keydown / "+input.keyupCount+" keyup handlers on canvas path":"no verified canvas input path")+". Events are synthetic/untrusted. Confirm an actual APEX Solo ride before testing.";
+      ?"Cork7 loaded. Game-path keyboard handlers are detected. Inputs will be synthetic and untrusted; the game must visibly respond before training can be trusted. Enter Solo → APEX → Ride Solo, then use Test Bot or Run Bot; Escape is sent first to close the pause menu."
+      :"Cork7 loaded, but no usable keyboard handler path is visible on the game canvas. Bot controls remain locked.";
+    $("c7ControlStatus").textContent="Browser agent: "+(input?.canSend?input.keydownCount+" keydown / "+input.keyupCount+" keyup handlers on canvas path":"no verified canvas input path")+". Events are synthetic/untrusted. No manual confirmation is required; Test Bot and Run Bot send Escape first.";
     startLocalStatusPolling();
   }catch(error){
     localPageError=error.message;
@@ -1238,6 +1229,7 @@ function startLocalStatusPolling(){
 }
 function localKeyCode(key){
   const map={
+    Escape:{key:"Escape",code:"Escape",keyCode:27},
     Space:{key:" ",code:"Space",keyCode:32},
     Shift:{key:"Shift",code:"ShiftLeft",keyCode:16},
     ArrowLeft:{key:"ArrowLeft",code:"ArrowLeft",keyCode:37},
@@ -1345,39 +1337,29 @@ async function performLocalTakeoff(event){
     (grabs.length?" · grabs "+grabs.join(" → "):"");
   return {action:localLastAction};
 }
-function confirmLocalRide(){
+async function sendEscapeFirst(taskLabel,allowResults=false){
   if(!ownerAuthorized)throw new Error("Unlock owner controls first.");
   if(!localGameLoaded)throw new Error("Open Cork7 here first.");
-  if(localTraining||completionTestRunning)throw new Error("Stop the current bot task before changing ride confirmation.");
-  const status=localReadStatus();
-  if(localRideConfirmed){
-    diagRecord("ride-confirmation-cleared",{focus:diagFocusInfo(status.ctx)});
-    localRideConfirmed=false;
-    $("c7ControlStatus").textContent="Ride confirmation cleared. All manual and automated game inputs are locked.";
-    $("c7SessionStatus").textContent="Ride confirmation cleared. The dashboard will not send game keys.";
-    refreshOwnerControls();
-    updateLocalTrainerDisplay();
-    updateCompletionTestDisplay();
-    return;
+  const before=localReadStatus();
+  if(before.canvasCount===0)throw new Error("Cork7's game canvas is not visible yet. Open the game and try again.");
+  if(!before.inputAgent?.canSend)throw new Error("The Cork7 keyboard input path is not ready. Refresh the player and try again.");
+  diagRecord("bot-first-input-escape",{task:String(taskLabel||"bot"),phaseBefore:before.phase,focus:diagFocusInfo(before.ctx)});
+  localLastAction=String(taskLabel||"Bot")+": Escape sent as first game input";
+  $("c7SessionStatus").textContent=String(taskLabel||"Bot")+" is sending Escape first to close Cork7's pause menu…";
+  await holdLocalKeys(["Escape"],180);
+  await localSleep(450);
+  const after=localReadStatus();
+  renderLocalStatus(after);
+  diagRecord("bot-first-input-escape-finished",{task:String(taskLabel||"bot"),phaseAfter:after.phase,canvasCount:after.canvasCount});
+  if(after.canvasCount===0||after.phase==="loading"||after.phase==="lobby"||after.phase==="park-select"||(!allowResults&&after.phase==="results")){
+    throw new Error("Escape was sent first, but Cork7 is still showing "+after.phase+". Enter an actual APEX Solo ride and try again.");
   }
-  if(status.canvasCount===0||status.phase==="lobby"||status.phase==="park-select"||status.phase==="loading"||status.phase==="results"){
-    throw new Error("Cork7 is not showing an active ride. Enter Solo → APEX → Ride Solo and reach the actual mountain before confirming.");
-  }
-  if(!status.inputAgent?.canSend){
-    throw new Error("The browser agent has not detected both keydown and keyup handlers on the visible game canvas path. Controls remain locked.");
-  }
-  localRideConfirmed=true;
-  diagRecord("ride-confirmed",{phase:status.phase,canvasCount:status.canvasCount,focus:diagFocusInfo(status.ctx)});
-  $("c7ControlStatus").textContent="Active ride confirmed by owner. Browser inputs are synthetic/untrusted; verify visible game response before trusting a score-training run. Clear this confirmation if you return to a menu.";
-  $("c7SessionStatus").textContent="Active APEX ride confirmed. No automatic input has been sent. Synthetic event mode is active.";
-  refreshOwnerControls();
-  updateLocalTrainerDisplay();
-  updateCompletionTestDisplay();
+  return after;
 }
 async function restartCork7(){
-  diagRecord("local-restart-requested",{rideConfirmed:localRideConfirmed});
+  diagRecord("local-restart-requested",{gameLoaded:localGameLoaded});
   if(!ownerAuthorized)throw new Error("Owner access is required.");
-  if(!localRideConfirmed)throw new Error("Confirm the active APEX Solo ride before restarting.");
+  if(!localGameLoaded)throw new Error("Open Cork7 here first.");
   await holdLocalKeys(["r"],2100);
   await localSleep(900);
   await holdLocalKeys(["f"],220);
@@ -1385,14 +1367,12 @@ async function restartCork7(){
   try{renderLocalStatus(localReadStatus());}catch{}
 }
 async function actCork7(key){
-  diagRecord("manual-key-button-clicked",{key:key,rideConfirmed:localRideConfirmed});
+  diagRecord("manual-key-button-clicked",{key:key,gameLoaded:localGameLoaded});
   if(!ownerAuthorized)throw new Error("Owner access is required.");
-  if(!localRideConfirmed)throw new Error("Confirm the active APEX Solo ride before using manual controls.");
+  if(!localGameLoaded)throw new Error("Open Cork7 here first.");
   const status=localReadStatus();
   if(status.canvasCount===0||status.phase==="lobby"||status.phase==="park-select"||status.phase==="loading"){
-    localRideConfirmed=false;
-    refreshOwnerControls();
-    throw new Error("The game no longer looks like an active ride. Controls have been locked.");
+    throw new Error("The game is not in a playable APEX Solo state yet.");
   }
   await holdLocalKeys([key],280);
   localLastAction="Manual key sent to "+(status.frameDocumentUrl||"embedded game frame")+": "+key;
@@ -1526,7 +1506,6 @@ function localHash(value){
 }
 async function runLocalPolicy(policy){
   let status=localReadStatus();
-  if(!localRideConfirmed)throw new Error("Confirm the active APEX Solo ride before score training.");
   if(status.canvasCount===0||status.phase==="lobby"||status.phase==="park-select"||status.phase==="loading"){
     throw new Error("The embedded Cork7 frame is not confirmed as an active ride. No training keys were sent.");
   }
@@ -1583,7 +1562,7 @@ function updateLocalTrainerDisplay(){
     :!localCompletion.baseline
       ?"Run Test Bot · No Tricks first to verify one complete run."
       :"Next strategy: "+(localTrainer.runsFinished<CORK7_SEED_LIBRARY.length?CORK7_SEED_LIBRARY[localTrainer.runsFinished].name:"evolve the best verified strategy");
-  $("c7TrainStart").textContent=localTraining?"Training active":"Start AI trainer";
+  $("c7TrainStart").textContent=localTraining?"Bot running":"Run Bot";
 }
 function updateCompletionTestDisplay(){
   const baseline=localCompletion.baseline;
@@ -1674,16 +1653,12 @@ async function finishCompletionTest(outcome,detail,runStarted){
   await syncLocalTrainer();
 }
 async function runNoTrickCompletionTest(){
-  diagRecord("completion-test-started",{gameLoaded:localGameLoaded,rideConfirmed:localRideConfirmed});
+  diagRecord("completion-test-started",{gameLoaded:localGameLoaded});
   if(!ownerAuthorized)throw new Error("Unlock owner controls before running the test.");
   if(localTraining)throw new Error("Stop score training before starting the separate completion test.");
   if(completionTestRunning)return;
   if(!localGameLoaded)await startCork7();
-  let initial=localReadStatus();
-  if(!localRideConfirmed)throw new Error("Confirm the active APEX Solo ride first. The bot will not send keys while Cork7 is on a menu.");
-  if(initial.canvasCount===0||initial.phase==="lobby"||initial.phase==="park-select"||initial.phase==="loading"||initial.phase==="results"){
-    throw new Error("Start a fresh APEX Solo run, then confirm the active ride before testing.");
-  }
+  if(!localGameLoaded)throw new Error("Cork7 did not finish loading. Open the game and try again.");
   completionTestRunning=true;
   const attemptStarted=Date.now();
   localCompletion.attempts++;
@@ -1692,12 +1667,11 @@ async function runNoTrickCompletionTest(){
   saveLocalTrainerCache();
   updateCompletionTestDisplay();
   refreshOwnerControls();
-  await syncLocalTrainer();
   let runStarted=0;
   try{
-    $("c7SessionStatus").textContent="Test Bot is starting the completion check. It will send only F once to skip the gondola, then wait hands-off. It will not restart or navigate menus.";
-    releaseLocalKeys();
-    let status=localReadStatus();
+    await sendEscapeFirst("Test Bot",false);
+    await syncLocalTrainer();
+    $("c7SessionStatus").textContent="Test Bot is starting. Escape was sent first to close Cork7's pause menu; it will now send F once to skip the gondola, then wait hands-off.";
     if(!completionTestRunning){
       await finishCompletionTest("stopped","Test stopped before starting. No completion was credited.",attemptStarted);
       return;
@@ -1708,29 +1682,25 @@ async function runNoTrickCompletionTest(){
       return;
     }
     await localSleep(1000);
-    status=localReadStatus();
+    let status=localReadStatus();
     if(status.canvasCount===0||status.phase==="lobby"||status.phase==="park-select"||status.phase==="loading"||status.phase==="results"){
-      throw new Error("The confirmed active ride disappeared after the gondola-skip input. No completion was recorded.");
+      throw new Error("Cork7 did not enter an active ride after Escape and the gondola-skip input. No completion was recorded.");
     }
     runStarted=Date.now();
-    localLastAction="Test Bot: F gondola skip only; no movement or trick inputs.";
-    $("c7SessionStatus").textContent="Test Bot is riding hands-off. No steering, pop, spin, flip or grab keys will be sent. Waiting for Cork7's real results screen.";
-    $("c7Details").textContent="TEST BOT · NO TRICKS · WAITING FOR RESULTS";
+    localLastAction="Test Bot: Escape first, then F gondola skip only; no movement or trick inputs.";
+    $("c7SessionStatus").textContent="Test Bot is riding hands-off. Escape was the first input, followed by one F to skip the gondola. No steering, pop, spin, flip or grab keys will be sent. Waiting for Cork7's real results screen.";
+    $("c7Details").textContent="TEST BOT · ESCAPE FIRST · NO TRICKS · WAITING FOR RESULTS";
     const deadline=runStarted+300000;
     while(completionTestRunning&&Date.now()<deadline){
       await localSleep(1000);
       status=localReadStatus();
       renderLocalStatus(status);
       if(status.phase==="results"){
-        await finishCompletionTest("completed",
-          "Test completed. Cork7's results screen was detected after a no-trick, hands-off run. This is now the saved run-completion baseline; no score was used.",
-          runStarted);
+        await finishCompletionTest("completed","Test completed. Cork7's results screen was detected after an Escape-first, no-trick hands-off run. This is now the saved run-completion baseline; no score was used.",runStarted);
         return;
       }
       if(status.phase==="lobby"||status.phase==="park-select"){
-        await finishCompletionTest("incomplete",
-          "The game returned to a menu before showing results. The test did not count as a completed run.",
-          runStarted);
+        await finishCompletionTest("incomplete","The game returned to a menu before showing results. The test did not count as a completed run.",runStarted);
         return;
       }
       updateCompletionTestDisplay();
@@ -1739,9 +1709,7 @@ async function runNoTrickCompletionTest(){
       await finishCompletionTest("stopped","Test stopped. No completion was credited.",runStarted||attemptStarted);
       return;
     }
-    await finishCompletionTest("incomplete",
-      "No Cork7 results screen appeared within five minutes. The test is marked incomplete; no score or completion was guessed.",
-      runStarted||attemptStarted);
+    await finishCompletionTest("incomplete","No Cork7 results screen appeared within five minutes. The test is marked incomplete; no score or completion was guessed.",runStarted||attemptStarted);
   }catch(error){
     await finishCompletionTest("incomplete","Test could not verify a completed run: "+error.message,runStarted||attemptStarted);
   }finally{
@@ -1763,62 +1731,62 @@ async function stopCompletionTest(){
 async function startLocalTraining(){
   if(!ownerAuthorized)throw new Error("Unlock owner controls first.");
   if(!localCompletion.baseline){
-    throw new Error("Run the separate Test Bot · No Tricks check first. Score training stays locked until a real Cork7 results screen confirms that a full run can be completed.");
+    throw new Error("Run Test Bot · No Tricks first. Score training stays locked until a real Cork7 Results screen confirms that a full run can be completed.");
   }
   if(completionTestRunning)throw new Error("Stop the completion test before starting score training.");
   if(!localGameLoaded)await startCork7();
-  const status=localReadStatus();
-  if(!localRideConfirmed)throw new Error("Confirm the active APEX Solo ride first. No trainer keys will be sent while the game is on a menu.");
-  if(status.canvasCount===0||status.phase==="lobby"||status.phase==="park-select"||status.phase==="loading"){
-    throw new Error("Return to the APEX Solo game, then confirm the active run before starting the trainer.");
-  }
-  // A verified no-trick baseline naturally ends on the results screen. The
-  // first training policy already restarts from that screen, so do not make
-  // users perform a redundant manual restart before the trainer can begin.
+  if(!localGameLoaded)throw new Error("Cork7 did not finish loading. Open the game and try again.");
   if(localTraining)return;
   localTraining=true;
   updateLocalTrainerDisplay();
   refreshOwnerControls();
-  await syncLocalTrainer();
   localTrainingTask=(async()=>{
-    while(localTraining){
-      const policy=nextLocalPolicy();
-      try{
-        localCurrentPolicy=policy.name||"starter strategy";
-        updateLocalTrainerDisplay();
-        const result=await runLocalPolicy(policy);
-        if(result.cancelled)break;
-        localTrainer.runsFinished++;
-        if(localTrainer.bestScore==null||result.score>localTrainer.bestScore){
-          localTrainer.bestScore=result.score;
-          localTrainer.bestPolicy=policy;
+    try{
+      await sendEscapeFirst("Run Bot",true);
+      await syncLocalTrainer();
+      while(localTraining){
+        const policy=nextLocalPolicy();
+        try{
+          localCurrentPolicy=policy.name||"starter strategy";
+          updateLocalTrainerDisplay();
+          const result=await runLocalPolicy(policy);
+          if(result.cancelled)break;
+          localTrainer.runsFinished++;
+          if(localTrainer.bestScore==null||result.score>localTrainer.bestScore){
+            localTrainer.bestScore=result.score;
+            localTrainer.bestPolicy=policy;
+          }
+          localTrainer.history.push({
+            run:localTrainer.runsFinished,
+            generation:localTrainer.generation,
+            score:result.score,
+            best:localTrainer.bestScore,
+            policyName:policy.name||"unnamed strategy",
+            scoreSource:result.scoreSource||"game result",
+            capturedAt:result.capturedAt
+          });
+          if(localTrainer.history.length>80)localTrainer.history.shift();
+          localTrainer.generation=1+Math.floor(Math.max(0,localTrainer.runsFinished-CORK7_SEED_LIBRARY.length)/6);
+          saveLocalTrainerCache();
+          $("c7SessionStatus").textContent="Actual Cork7 run "+localTrainer.runsFinished+" completed. Score captured: "+result.score.toLocaleString()+". The next policy is being tested.";
+          updateLocalTrainerDisplay();
+          await syncLocalTrainer();
+          await localSleep(900);
+        }catch(error){
+          localTraining=false;
+          $("c7SessionStatus").textContent="Training paused: "+error.message;
+          break;
         }
-        localTrainer.history.push({
-          run:localTrainer.runsFinished,
-          generation:localTrainer.generation,
-          score:result.score,
-          best:localTrainer.bestScore,
-          policyName:policy.name||"unnamed strategy",
-          scoreSource:result.scoreSource||"game result",
-          capturedAt:result.capturedAt
-        });
-        if(localTrainer.history.length>80)localTrainer.history.shift();
-        localTrainer.generation=1+Math.floor(Math.max(0,localTrainer.runsFinished-CORK7_SEED_LIBRARY.length)/6);
-        saveLocalTrainerCache();
-        $("c7SessionStatus").textContent="Actual Cork7 run "+localTrainer.runsFinished+" completed. Score captured: "+result.score.toLocaleString()+". The next policy is being tested.";
-        updateLocalTrainerDisplay();
-        await syncLocalTrainer();
-        await localSleep(900);
-      }catch(error){
-        localTraining=false;
-        $("c7SessionStatus").textContent="Training paused: "+error.message;
-        break;
       }
+    }catch(error){
+      localTraining=false;
+      $("c7SessionStatus").textContent="Training paused: "+error.message;
+    }finally{
+      releaseLocalKeys();
+      updateLocalTrainerDisplay();
+      refreshOwnerControls();
+      try{await syncLocalTrainer();}catch(error){$("c7SessionStatus").textContent+=" Checkpoint sync failed: "+error.message;}
     }
-    releaseLocalKeys();
-    updateLocalTrainerDisplay();
-    refreshOwnerControls();
-    try{await syncLocalTrainer();}catch(error){$("c7SessionStatus").textContent+=" Checkpoint sync failed: "+error.message;}
   })();
 }
 async function stopLocalTraining(){
@@ -1850,7 +1818,6 @@ async function stopCork7(){
   if(localStatusTimer){clearInterval(localStatusTimer);localStatusTimer=null;}
   localGameLoaded=false;
   localGameLoading=false;
-  localRideConfirmed=false;
   $("c7LocalPlayer").src="about:blank";
   $("c7LocalPlayer").classList.remove("is-open");
   $("c7ScreenEmpty").hidden=false;
@@ -1885,10 +1852,6 @@ $("ownerLogout").addEventListener("click",logoutOwner);
 $("ownerPasscode").addEventListener("keydown",event=>{if(event.key==="Enter")loginOwner();});
 ["startBtn","pauseBtn","resumeBtn","resetBtn"].forEach(id=>$(id).dataset.ownerOnly="1");
 $("c7Start").addEventListener("click",startCork7);
-$("c7ConfirmRide").addEventListener("click",()=>{
-  try{confirmLocalRide();}
-  catch(error){$("c7SessionStatus").textContent="Could not confirm ride: "+error.message;setOwnerStatus(error.message,true);}
-});
 $("c7Observe").addEventListener("click",observeCork7);
 $("c7Restart").addEventListener("click",restartCork7);
 $("c7TestStart").addEventListener("click",()=>runNoTrickCompletionTest().catch(error=>{
@@ -1916,7 +1879,6 @@ window.addEventListener("pagehide",()=>{
   }
   completionTestRunning=false;
   localTraining=false;
-  localRideConfirmed=false;
   releaseLocalKeys();
   saveLocalTrainerCache();
 });

@@ -9,36 +9,33 @@ html=html.replace('const takeoffs=[14500,33000,51500,70500];','const takeoffs=[1
 html=html.replace('!!frameUrl&&!/^about:(blank|srcdoc)$/i.test(frameUrl)','!!frameUrl')
 
 game_html='''<!doctype html><html><body>
-<div id="stage">APEX ACTIVE</div><canvas id="game" width="800" height="500" style="width:800px;height:500px"></canvas>
+<div id="stage">PAUSE MENU</div><canvas id="game" width="800" height="500" style="width:800px;height:500px"></canvas>
 <script>
 (() => {
- const canvas=document.getElementById('game'), stage=document.getElementById('stage');
- let completionStarted=false, runNumber=0, resultTimer=null, lastScore=8000;
- function active(){ stage.textContent='APEX ACTIVE'; }
- function completeBaseline(){ stage.textContent='RUN COMPLETE FINAL SCORE: 8000'; }
- function startNewScoredRun(){
-   runNumber++; active();
-   clearTimeout(resultTimer);
-   resultTimer=setTimeout(()=>{ lastScore=8000+runNumber*2000; stage.textContent='RUN COMPLETE FINAL SCORE: '+lastScore; },9000);
- }
+ const stage=document.getElementById('stage');
+ let completionStarted=false, runNumber=0, resultTimer=null, menuOpen=true, returnStage='APEX ACTIVE';
+ const keyLog=[];
+ function active(){stage.textContent='APEX ACTIVE';}
+ function completeBaseline(){stage.textContent='RUN COMPLETE FINAL SCORE: 8000';}
+ function startNewScoredRun(){runNumber++;active();clearTimeout(resultTimer);resultTimer=setTimeout(()=>{stage.textContent='RUN COMPLETE FINAL SCORE: '+(8000+runNumber*2000);},9000);}
+ function openMenu(){if(!menuOpen){returnStage=stage.textContent;menuOpen=true;stage.textContent='PAUSE MENU';}}
+ window.__C7_KEYS__=keyLog; window.__C7_OPEN_MENU__=openMenu;
  window.addEventListener('keydown',event=>{
-   if(event.key==='f'&&!completionStarted&&runNumber===0){
-     completionStarted=true; clearTimeout(resultTimer);
-     resultTimer=setTimeout(completeBaseline,1750);
-   }
+   keyLog.push('keydown:'+event.key);
+   if(event.key==='Escape'){if(menuOpen){menuOpen=false;stage.textContent=returnStage;}return;}
+   if(menuOpen)return;
+   if(event.key==='f'&&!completionStarted&&runNumber===0){completionStarted=true;clearTimeout(resultTimer);resultTimer=setTimeout(completeBaseline,1750);}
    if(event.key==='r'&&/RUN COMPLETE/.test(stage.textContent))startNewScoredRun();
  });
- const noOp=()=>{};
- window.addEventListener('keydown',noOp);
- window.addEventListener('keyup',noOp);
+ window.addEventListener('keyup',event=>keyLog.push('keyup:'+event.key));
+ window.addEventListener('keydown',()=>{}); window.addEventListener('keyup',()=>{});
  window.__CORK7_AGENT__={
    status:()=>({ready:true,canvasFound:true,visibleCanvas:true,keydownCount:3,keyupCount:3,canSend:true,trustedHardwareEvents:false}),
    send(key,type,target){
-     const map={Space:[' ','Space',32],Shift:['Shift','ShiftLeft',16],ArrowLeft:['ArrowLeft','ArrowLeft',37],ArrowRight:['ArrowRight','ArrowRight',39],ArrowUp:['ArrowUp','ArrowUp',38],ArrowDown:['ArrowDown','ArrowDown',40]};
+     const map={Escape:['Escape','Escape',27],Space:[' ','Space',32],Shift:['Shift','ShiftLeft',16],ArrowLeft:['ArrowLeft','ArrowLeft',37],ArrowRight:['ArrowRight','ArrowRight',39],ArrowUp:['ArrowUp','ArrowUp',38],ArrowDown:['ArrowDown','ArrowDown',40]};
      const m=map[key]||[String(key),String(key).length===1?'Key'+String(key).toUpperCase():String(key),String(key).toUpperCase().charCodeAt(0)];
-     const ev=new KeyboardEvent(type,{key:m[0],code:m[1],keyCode:m[2],which:m[2],bubbles:true,cancelable:true,composed:true});
-     target.dispatchEvent(ev);
-     return {ok:true,registeredOnPath:3,trusted:ev.isTrusted,defaultPrevented:ev.defaultPrevented};
+     target.dispatchEvent(new KeyboardEvent(type,{key:m[0],code:m[1],keyCode:m[2],which:m[2],bubbles:true,cancelable:true,composed:true}));
+     return {ok:true,registeredOnPath:3,trusted:false,defaultPrevented:false};
    }
  };
 })();
@@ -82,9 +79,9 @@ with sync_playwright() as p:
   page.wait_for_function("document.getElementById('ownerStatus').textContent.includes('Owner verified')",timeout=10000)
   page.locator('#c7Start').click()
   page.wait_for_function("document.getElementById('c7SessionStatus').textContent.includes('synthetic') || document.getElementById('c7SessionStatus').textContent.includes('keyboard')",timeout=10000)
-  assert not page.locator('#c7ConfirmRide').is_disabled(), 'Ride confirmation must be clickable after owner unlock and game load'
+  assert page.locator('#c7ConfirmRide').count()==0, 'Manual ride-confirmation control must be removed'
   mouse_guard = page.evaluate("""() => {
-    const button=document.querySelector('#c7ConfirmRide');
+    const button=document.querySelector('#c7TestStart');
     const player=document.querySelector('#c7LocalPlayer');
     const game=player.contentDocument.querySelector('.game-frame iframe').contentWindow;
     const event=new MouseEvent('mousedown',{bubbles:true,cancelable:true});
@@ -93,13 +90,32 @@ with sync_playwright() as p:
   }""")
   assert not mouse_guard['defaultPrevented'], mouse_guard
   assert mouse_guard['guardUntil'] > page.evaluate('Date.now()'), mouse_guard
-  page.locator('#c7ConfirmRide').click()
-  assert page.locator('#c7ControlStatus').inner_text().lower().find('confirmed')>=0
   page.locator('#c7TestStart').click()
   page.wait_for_function("document.getElementById('c7CompletionStats').textContent.includes('Completion baseline VERIFIED (')",timeout=12000)
+  baseline_keys=page.evaluate("""() => {
+    const game=document.getElementById('c7LocalPlayer').contentDocument.querySelector('.game-frame iframe').contentWindow;
+    return game.__C7_KEYS__.slice(0,4);
+  }""")
+  assert baseline_keys==['keydown:Escape','keyup:Escape','keydown:f','keyup:f'], baseline_keys
   page.wait_for_function("!document.getElementById('c7TrainStart').disabled",timeout=5000)
   print('BASELINE VERIFIED',page.locator('#c7CompletionStats').inner_text(),flush=True)
+  key_count_before_run=page.evaluate("""() => {
+    const game=document.getElementById('c7LocalPlayer').contentDocument.querySelector('.game-frame iframe').contentWindow;
+    const before=game.__C7_KEYS__.length;
+    game.__C7_OPEN_MENU__();
+    return before;
+  }""")
   page.locator('#c7TrainStart').click(timeout=5000)
+  page.wait_for_function("""before => {
+    const game=document.getElementById('c7LocalPlayer').contentDocument.querySelector('.game-frame iframe').contentWindow;
+    return game.__C7_KEYS__.length > before;
+  }""",key_count_before_run,timeout=5000)
+  run_keys=page.evaluate("""before => {
+    const game=document.getElementById('c7LocalPlayer').contentDocument.querySelector('.game-frame iframe').contentWindow;
+    return game.__C7_KEYS__.slice(before,before+4);
+  }""",key_count_before_run)
+  assert run_keys[:2]==['keydown:Escape','keyup:Escape'], run_keys
+  assert run_keys[2]=='keydown:r', run_keys
   for checkpoint in range(24):
     page.wait_for_timeout(1000)
     now=page.locator('#c7TrainerStats').inner_text()

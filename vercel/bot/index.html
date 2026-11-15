@@ -30,7 +30,6 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
 .c7-local-frame-wrap iframe{width:100%;height:100%;min-height:310px;border:0;display:block;background:#000}
 .c7-local-frame-wrap #c7ScreenEmpty{position:absolute;inset:0;z-index:2;width:100%;height:100%;min-height:0;aspect-ratio:auto;margin:0;border:0;border-radius:0;pointer-events:none}
 @media(max-width:620px){.owner-access input{min-width:0;max-width:none;flex:1}.owner-access .owner-state{flex-basis:100%}}
-  #c7Restart,[data-c7key],#c7TrainStart,#c7TrainPause,#c7TrainerStats,#c7CurrentStrategy{display:none!important}
 </style>
 </head>
 <body>
@@ -79,7 +78,7 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
           <button class="btn" id="c7Restart" data-owner-only disabled>Restart run</button>
           <button class="btn danger" id="c7Stop" data-owner-only disabled>Close local game</button>
         </div>
-        <div class="panel-meta">EMBEDDED GAME / PLAYER STATUS</div>
+        <div class="panel-meta">NORMAL GAME INPUTS / EXPERIMENTAL CONTROL</div>
         <div class="realgame-controls">
           <button class="btn" data-c7key="a" data-owner-only disabled>A</button><button class="btn" data-c7key="d" data-owner-only disabled>D</button>
           <button class="btn" data-c7key="w" data-owner-only disabled>W</button><button class="btn" data-c7key="s" data-owner-only disabled>S</button>
@@ -89,13 +88,17 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
           <button class="btn" data-c7key="ArrowUp" data-owner-only disabled>↑</button><button class="btn" data-c7key="ArrowDown" data-owner-only disabled>↓</button>
         </div>
         <div class="realgame-status"><span class="realgame-dot">LIVE FEEDBACK</span> <span id="c7Details">Waiting for browser session.</span></div>
-        <div class="panel-meta">EMBEDDED GAME / PREVIEW</div>
+        <div class="panel-meta">BUILT-IN GAME KNOWLEDGE / STARTER CURRICULUM</div>
         <div class="realgame-status">
-          <strong>Embedded Cork7 player</strong>
-          <div>The game is loaded in your browser. Player rendering and page diagnostics stay on this dashboard.</div>
-          <div id="c7CurrentStrategy" style="margin-top:7px;color:var(--muted)">Player preview mode</div>
+          <strong>What the game bot knows before its first run</strong>
+          <div>• Space loads a pop; releasing it triggers the jump.</div>
+          <div>• A / D spin; W / S flip; ← / → add air roll.</div>
+          <div>• Trick controls are set at the jump lip, not long after the pop.</div>
+          <div>• Shift / Q / E select grabs; the bot releases them before the landing phase.</div>
+          <div>• Ten built-in strategies run first. After that, the best verified score guides small mutations.</div>
+          <div id="c7CurrentStrategy" style="margin-top:7px;color:var(--muted)">Strategy queue: 10 starter patterns, then score-based evolution.</div>
         </div>
-        <div class="panel-meta">PLAYER PREVIEW MODE</div>
+        <div class="panel-meta">REAL-GAME SCORE TRAINER / EXPERIMENTAL</div>
         <div class="realgame-controls">
           <button class="btn primary" id="c7TrainStart" data-owner-only disabled>Start AI trainer</button>
           <button class="btn" id="c7TrainPause" data-owner-only disabled>Stop training</button>
@@ -266,12 +269,12 @@ async function restartCork7(){
   catch(error){$("c7SessionStatus").textContent="Restart failed: "+error.message;}
   finally{$("c7Restart").disabled=false;}
 }
-async function trainCork7(){
-  localTraining=false;
-  releaseLocalKeys();
-  updateLocalTrainerDisplay();
-  $("c7SessionStatus").textContent="Automated gameplay training is disabled. The embedded Cork7 player remains available.";
-  refreshOwnerControls();
+async function trainCork7(action){
+  const button=action==="train-start"?$("c7TrainStart"):$("c7TrainPause");
+  button.disabled=true;
+  try{await cork7Request(action,"POST",{});if(action==="train-start")startCork7Polling();}
+  catch(error){$("c7SessionStatus").textContent="Trainer command failed: "+error.message;}
+  finally{button.disabled=false;}
 }
 async function stopCork7(){
   $("c7Stop").disabled=true;
@@ -464,6 +467,101 @@ let localTrainingTask=null;
 let localStatusTimer=null;
 let localPageError="";
 let localActiveKeys=new Set();
+const LOCAL_TRAINER_KEY="cork7-trainer-state-v1";
+let localTrainerCacheFound=false;
+let trainerSyncFingerprint="";
+let trainerSyncInFlight=null;
+
+function saveLocalTrainerCache(){
+  try{
+    const value={
+      version:1,
+      generation:localTrainer.generation,
+      runsFinished:localTrainer.runsFinished,
+      bestScore:localTrainer.bestScore,
+      bestPolicy:localTrainer.bestPolicy,
+      history:localTrainer.history.slice(-80),
+      savedAt:new Date().toISOString()
+    };
+    localStorage.setItem(LOCAL_TRAINER_KEY,JSON.stringify(value));
+    localTrainerCacheFound=true;
+    return true;
+  }catch(error){
+    localPageError="Could not save the browser training checkpoint: "+error.message;
+    return false;
+  }
+}
+function loadLocalTrainerCache(){
+  try{
+    const raw=localStorage.getItem(LOCAL_TRAINER_KEY);
+    if(!raw)return false;
+    const value=JSON.parse(raw);
+    if(!value||value.version!==1)return false;
+    const runs=Math.max(0,Math.min(100000000,Math.floor(Number(value.runsFinished)||0)));
+    const score=value.bestScore==null?null:Number(value.bestScore);
+    const policy=value.bestPolicy&&Array.isArray(value.bestPolicy.events)&&value.bestPolicy.events.length<=24
+      ?value.bestPolicy:null;
+    const history=Array.isArray(value.history)?value.history.slice(-80).filter(item=>
+      item&&Number.isFinite(Number(item.run))&&Number.isFinite(Number(item.score))
+    ).map(item=>({...item})).slice(-80):[];
+    localTrainer={
+      generation:Math.max(1,Math.floor(Number(value.generation)||1)),
+      runsFinished:runs,
+      bestScore:Number.isFinite(score)&&score>=0?Math.floor(score):null,
+      bestPolicy:policy,
+      history
+    };
+    localTrainerCacheFound=true;
+    localTraining=false;
+    return true;
+  }catch(error){
+    localPageError="Saved browser training data could not be read: "+error.message;
+    return false;
+  }
+}
+function mergeRemoteTrainer(remote){
+  if(!remote||typeof remote!=="object")return false;
+  const remoteRuns=Math.max(0,Math.floor(Number(remote.runsFinished)||0));
+  const localRuns=localTrainer.runsFinished;
+  const remoteScore=remote.bestScore==null?null:Number(remote.bestScore);
+  const localScore=localTrainer.bestScore;
+  const remoteHistory=Array.isArray(remote.history)?remote.history.slice(-80):[];
+  const remotePolicy=remote.bestPolicy&&Array.isArray(remote.bestPolicy.events)?remote.bestPolicy:null;
+  const hadLocal=localTrainerCacheFound;
+  if(!hadLocal||remoteRuns>localRuns){
+    localTrainer={
+      generation:Math.max(1,Math.floor(Number(remote.generation)||1)),
+      runsFinished:remoteRuns,
+      bestScore:Number.isFinite(remoteScore)&&remoteScore>=0?Math.floor(remoteScore):null,
+      bestPolicy:remotePolicy,
+      history:remoteHistory
+    };
+  }else{
+    const merged=new Map();
+    for(const item of remoteHistory){
+      if(item&&Number.isFinite(Number(item.run))&&Number.isFinite(Number(item.score))){
+        merged.set(String(item.run)+"|"+String(item.score)+"|"+String(item.capturedAt||""),item);
+      }
+    }
+    for(const item of localTrainer.history){
+      if(item&&Number.isFinite(Number(item.run))&&Number.isFinite(Number(item.score))){
+        merged.set(String(item.run)+"|"+String(item.score)+"|"+String(item.capturedAt||""),item);
+      }
+    }
+    const remoteIsBest=Number.isFinite(remoteScore)&&(localScore==null||remoteScore>localScore);
+    localTrainer={
+      generation:Math.max(localTrainer.generation,Math.floor(Number(remote.generation)||1)),
+      runsFinished:Math.max(localRuns,remoteRuns),
+      bestScore:remoteIsBest?Math.floor(remoteScore):localScore,
+      bestPolicy:remoteIsBest?remotePolicy:(localTrainer.bestPolicy||remotePolicy),
+      history:Array.from(merged.values()).sort((a,b)=>(Number(a.run)||0)-(Number(b.run)||0)).slice(-80)
+    };
+  }
+  saveLocalTrainerCache();
+  return remoteRuns<localTrainer.runsFinished||
+    (localTrainer.bestScore!=null&&(remoteScore==null||localTrainer.bestScore>remoteScore))||
+    (remote.training===true&&!localTraining);
+}
 
 const localSleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function setOwnerStatus(message,isError=false){
@@ -700,17 +798,17 @@ async function observeCork7(){
     const remote=await api("cork7-status");
     renderCork7(remote);
     if(remote.trainer){
-      localTrainer={
-        generation:Number(remote.trainer.generation)||1,
-        runsFinished:Number(remote.trainer.runsFinished)||0,
-        bestScore:Number.isFinite(remote.trainer.bestScore)?remote.trainer.bestScore:null,
-        bestPolicy:remote.trainer.bestPolicy||null,
-        history:Array.isArray(remote.trainer.history)?remote.trainer.history.slice(-80):[]
-      };
+      const shouldSync=mergeRemoteTrainer(remote.trainer);
       updateLocalTrainerDisplay();
+      if(ownerAuthorized&&shouldSync){
+        trainerSyncFingerprint="";
+        await syncLocalTrainer();
+      }
     }
+    $("c7Details").dataset.worker="online";
   }catch(error){
-    $("c7Details").textContent="Northflank checkpoint service: "+error.message;
+    $("c7Details").dataset.worker="offline";
+    $("c7Details").textContent="Checkpoint worker unavailable. Local runs can continue; sync will retry: "+error.message;
   }
   if(localGameLoaded){
     try{renderLocalStatus(localReadStatus());}catch(error){$("c7SessionStatus").textContent=error.message;}
@@ -723,28 +821,375 @@ function startLocalStatusPolling(){
     try{renderLocalStatus(localReadStatus());}catch(error){localPageError=error.message;$("c7SessionStatus").textContent=error.message;}
   },1200);
 }
+function localKeyCode(key){
+  const map={
+    Space:{key:" ",code:"Space",keyCode:32},
+    Shift:{key:"Shift",code:"ShiftLeft",keyCode:16},
+    ArrowLeft:{key:"ArrowLeft",code:"ArrowLeft",keyCode:37},
+    ArrowUp:{key:"ArrowUp",code:"ArrowUp",keyCode:38},
+    ArrowRight:{key:"ArrowRight",code:"ArrowRight",keyCode:39},
+    ArrowDown:{key:"ArrowDown",code:"ArrowDown",keyCode:40}
+  };
+  return map[key]||{key,code:"Key"+String(key).toUpperCase(),keyCode:String(key).toUpperCase().charCodeAt(0)};
+}
+function dispatchLocalKey(ctx,key,type){
+  const info=localKeyCode(key);
+  try{ctx.frame.focus();ctx.win.focus();}catch{}
+  const canvas=ctx.doc.querySelector("canvas");
+  if(canvas){
+    if(canvas.tabIndex<0)canvas.tabIndex=0;
+    try{canvas.focus({preventScroll:true});}catch{}
+  }
+  const target=canvas||ctx.doc.activeElement||ctx.doc.body||ctx.doc.documentElement;
+  const event=new ctx.win.KeyboardEvent(type,{
+    key:info.key,code:info.code,keyCode:info.keyCode,which:info.keyCode,
+    bubbles:true,cancelable:true,composed:true
+  });
+  try{
+    Object.defineProperty(event,"keyCode",{get:()=>info.keyCode});
+    Object.defineProperty(event,"which",{get:()=>info.keyCode});
+  }catch{}
+  target.dispatchEvent(event);
+}
 function releaseLocalKeys(){
+  if(!localGameLoaded)return;
+  try{
+    const ctx=getLocalGameContext();
+    for(const key of localActiveKeys)dispatchLocalKey(ctx,key,"keyup");
+  }catch{}
   localActiveKeys.clear();
 }
-async function holdLocalKeys(){
-  throw new Error("Automated game inputs are disabled in this build.");
+async function holdLocalKeys(keys,durationMs){
+  const ctx=getLocalGameContext();
+  const normalized=[...new Set(keys)];
+  try{
+    for(const key of normalized){dispatchLocalKey(ctx,key,"keydown");localActiveKeys.add(key);}
+    await localSleep(Math.max(50,Math.min(3000,Number(durationMs)||250)));
+  }finally{
+    for(const key of normalized){
+      try{dispatchLocalKey(ctx,key,"keyup");}catch{}
+      localActiveKeys.delete(key);
+    }
+  }
+}
+async function performLocalTakeoff(event){
+  const ctx=getLocalGameContext();
+  const grabKeys=new Set(["q","e","Shift"]);
+  const trickKeys=[...new Set((event.keys||[]).filter(key=>!grabKeys.has(key)))];
+  const grabs=Array.isArray(event.grabSequence)
+    ?event.grabSequence.slice(0,2)
+    :(event.keys||[]).filter(key=>grabKeys.has(key)).slice(0,2);
+  const preload=Math.max(220,Math.min(1000,Number(event.preloadMs)||420));
+  const lead=Math.max(35,Math.min(220,Number(event.triggerLeadMs)||85));
+  const duration=Math.max(240,Math.min(1100,Number(event.durationMs)||470));
+  const grabDelay=Math.max(40,Math.min(260,Number(event.grabDelayMs)||90));
+  const grabDuration=Math.max(250,Math.min(1000,Number(event.grabDurationMs)||430));
+  const heldKeys=["Space",...trickKeys];
+  let trickReleaseAt=0;
+  try{
+    // Load the pop, set trick controls at the lip, then release Space.
+    dispatchLocalKey(ctx,"Space","keydown");localActiveKeys.add("Space");
+    await localSleep(preload);
+    if(!localTraining)return;
+    for(const key of trickKeys){dispatchLocalKey(ctx,key,"keydown");localActiveKeys.add(key);}
+    await localSleep(lead);
+    dispatchLocalKey(ctx,"Space","keyup");localActiveKeys.delete("Space");
+    trickReleaseAt=Date.now()+duration;
+    await localSleep(grabDelay);
+    for(const grab of grabs){
+      if(!localTraining)return;
+      dispatchLocalKey(ctx,grab,"keydown");localActiveKeys.add(grab);
+      await localSleep(grabDuration);
+      dispatchLocalKey(ctx,grab,"keyup");localActiveKeys.delete(grab);
+      await localSleep(55);
+    }
+    const remaining=trickReleaseAt-Date.now();
+    if(remaining>0)await localSleep(remaining);
+    for(const key of trickKeys){
+      if(localActiveKeys.has(key)){
+        dispatchLocalKey(ctx,key,"keyup");
+        localActiveKeys.delete(key);
+      }
+    }
+  }finally{
+    for(const key of [...heldKeys,...grabs]){
+      if(localActiveKeys.has(key)){
+        try{dispatchLocalKey(ctx,key,"keyup");}catch{}
+        localActiveKeys.delete(key);
+      }
+    }
+  }
+  localLastAction="Space pop + "+(trickKeys.join("+")||"straight")+
+    (grabs.length?" · grabs "+grabs.join(" → "):"");
+  return {action:localLastAction};
 }
 async function restartCork7(){
-  throw new Error("Automated gameplay controls are disabled. The embedded player remains available.");
+  if(!ownerAuthorized)throw new Error("Owner access is required.");
+  await holdLocalKeys(["r"],2100);
+  await localSleep(900);
+  await holdLocalKeys(["f"],220);
+  await localSleep(1100);
+  try{renderLocalStatus(localReadStatus());}catch{}
 }
-async function actCork7(){
-  throw new Error("Automated gameplay controls are disabled. The embedded player remains available.");
+async function actCork7(key){
+  if(!ownerAuthorized)throw new Error("Owner access is required.");
+  await holdLocalKeys([key],280);
+  localLastAction="Manual game input: "+key;
+  try{renderLocalStatus(localReadStatus());}catch{}
+}
+
+function makeCork7Seed(name,description,actions){
+  const takeoffs=[14500,33000,51500,70500];
+  return {
+    name,description,
+    events:takeoffs.map((atMs,index)=>{
+      const action=actions[index%actions.length];
+      return {
+        id:index+1,atMs,
+        preloadMs:action.preloadMs||420,
+        triggerLeadMs:action.triggerLeadMs||85,
+        keys:(action.keys||[]).slice(),
+        grabSequence:(action.grabSequence||[]).slice(),
+        grabDelayMs:action.grabDelayMs||90,
+        grabDurationMs:action.grabDurationMs||430,
+        durationMs:action.durationMs||470
+      };
+    }),
+    createdAt:new Date().toISOString()
+  };
+}
+const CORK7_SEED_LIBRARY=[
+  makeCork7Seed("01 · Right-spin baseline","A simple right spin with one Japan grab; establishes a baseline score.",[
+    {keys:["d"],grabSequence:["e"],durationMs:450},
+    {keys:["d"],grabSequence:["e"],durationMs:500}
+  ]),
+  makeCork7Seed("02 · Left-spin baseline","Mirrors the first baseline with a left spin and Tail grab.",[
+    {keys:["a"],grabSequence:["q"],durationMs:450},
+    {keys:["a"],grabSequence:["q"],durationMs:500}
+  ]),
+  makeCork7Seed("03 · Frontflip baseline","Tests a frontflip-only line, with one grab per jump.",[
+    {keys:["w"],grabSequence:["e"],durationMs:420},
+    {keys:["w"],grabSequence:["q"],durationMs:460}
+  ]),
+  makeCork7Seed("04 · Backflip baseline","Tests a backflip-only line, changing grab direction between jumps.",[
+    {keys:["s"],grabSequence:["q"],durationMs:420},
+    {keys:["s"],grabSequence:["e"],durationMs:460}
+  ]),
+  makeCork7Seed("05 · Spin + frontflip","Combines spin and frontflip inputs at the same take-off.",[
+    {keys:["d","w"],grabSequence:["e"],durationMs:440},
+    {keys:["a","w"],grabSequence:["q"],durationMs:460}
+  ]),
+  makeCork7Seed("06 · Spin + backflip","Combines spin and backflip inputs at the same take-off.",[
+    {keys:["d","s"],grabSequence:["q"],durationMs:440},
+    {keys:["a","s"],grabSequence:["e"],durationMs:460}
+  ]),
+  makeCork7Seed("07 · Air-roll baseline","Adds left/right air roll to a spin and compares the resulting score.",[
+    {keys:["d","ArrowRight"],grabSequence:["e"],durationMs:460},
+    {keys:["a","ArrowLeft"],grabSequence:["q"],durationMs:460}
+  ]),
+  makeCork7Seed("08 · Mixed trick line","Alternates spins, flips and grab choices across the run.",[
+    {keys:["d"],grabSequence:["e"],durationMs:440},
+    {keys:["a"],grabSequence:["q"],durationMs:440},
+    {keys:["d","w"],grabSequence:["Shift"],durationMs:460},
+    {keys:["a","s"],grabSequence:["e"],durationMs:460}
+  ]),
+  makeCork7Seed("09 · Sequential grabs","Tests two distinct grabs one after the other within the same jump.",[
+    {keys:["d"],grabSequence:["q","e"],durationMs:640,grabDurationMs:310},
+    {keys:["a"],grabSequence:["e","q"],durationMs:640,grabDurationMs:310}
+  ]),
+  makeCork7Seed("10 · Rodeo / misty inputs","Tests the up-arrow with spin and flip inputs as one in-game combination.",[
+    {keys:["ArrowUp","d","s"],grabSequence:["q"],durationMs:460},
+    {keys:["ArrowUp","a","w"],grabSequence:["e"],durationMs:460}
+  ])
+];
+function randomLocalPolicy(){
+  const seed=CORK7_SEED_LIBRARY[Math.floor(Math.random()*CORK7_SEED_LIBRARY.length)];
+  return {...JSON.parse(JSON.stringify(seed)),name:"Exploration · "+seed.name,createdAt:new Date().toISOString()};
+}
+function nextLocalPolicy(){
+  if(localTrainer.runsFinished<CORK7_SEED_LIBRARY.length){
+    return {...JSON.parse(JSON.stringify(CORK7_SEED_LIBRARY[localTrainer.runsFinished])),seedIndex:localTrainer.runsFinished+1,createdAt:new Date().toISOString()};
+  }
+  const parent=localTrainer.bestPolicy;
+  if(!parent||!Array.isArray(parent.events)||Math.random()<0.14)return randomLocalPolicy();
+  const events=parent.events.map((event,index)=>{
+    const keys=(event.keys||[]).slice();
+    const grabs=(event.grabSequence||[]).slice();
+    if(Math.random()<0.2){
+      const at=keys.findIndex(key=>key==="a"||key==="d");
+      if(at>=0)keys[at]=keys[at]==="a"?"d":"a";
+    }
+    if(Math.random()<0.16){
+      const at=keys.findIndex(key=>key==="w"||key==="s");
+      if(at>=0)keys[at]=keys[at]==="w"?"s":"w";
+    }
+    if(Math.random()<0.18){
+      const choices=["q","e","Shift"];
+      if(grabs.length)grabs[Math.floor(Math.random()*grabs.length)]=choices[Math.floor(Math.random()*choices.length)];
+      else grabs.push(choices[Math.floor(Math.random()*choices.length)]);
+    }
+    if(Math.random()<0.1){
+      const at=keys.findIndex(key=>key==="ArrowLeft"||key==="ArrowRight");
+      if(at>=0)keys.splice(at,1);
+      else keys.push(Math.random()<0.5?"ArrowLeft":"ArrowRight");
+    }
+    return {
+      id:index+1,
+      atMs:Math.max(8000,Math.min(95000,(Number(event.atMs)||14500)+Math.round((Math.random()-.5)*1800))),
+      preloadMs:Math.max(250,Math.min(950,(Number(event.preloadMs)||420)+Math.round((Math.random()-.5)*150))),
+      triggerLeadMs:Math.max(40,Math.min(220,(Number(event.triggerLeadMs)||85)+Math.round((Math.random()-.5)*50))),
+      keys:[...new Set(keys)].slice(0,4),
+      grabSequence:grabs.slice(0,2),
+      grabDelayMs:Math.max(45,Math.min(260,(Number(event.grabDelayMs)||90)+Math.round((Math.random()-.5)*45))),
+      grabDurationMs:Math.max(250,Math.min(950,(Number(event.grabDurationMs)||430)+Math.round((Math.random()-.5)*140))),
+      durationMs:Math.max(250,Math.min(1000,(Number(event.durationMs)||470)+Math.round((Math.random()-.5)*170)))
+    };
+  });
+  return {
+    name:"Evolved · "+(parent.name||"best verified strategy"),
+    description:"A small mutation of the highest-scoring strategy, selected only by real results-screen scores.",
+    parentName:parent.name||null,
+    events:events.sort((a,b)=>a.atMs-b.atMs),
+    createdAt:new Date().toISOString()
+  };
+}
+async function waitLocalUntil(target){
+  while(localTraining&&Date.now()<target)await localSleep(Math.min(250,Math.max(30,target-Date.now())));
+}
+function localHash(value){
+  let textValue="";
+  try{textValue=typeof value==="string"?value:JSON.stringify(value);}catch{textValue=String(value);}
+  let hash=2166136261;
+  for(let i=0;i<textValue.length;i++){hash^=textValue.charCodeAt(i);hash=Math.imul(hash,16777619);}
+  return (hash>>>0).toString(16);
+}
+async function localReadSavedScores(ctx){
+  const output=[];
+  const scoreKey=/(score|points|totalScore|runScore)/i;
+  const seen=new Set();
+  function walk(value,source,path,depth){
+    if(value==null||depth>5)return;
+    if(typeof value==="object"){
+      if(seen.has(value))return;
+      seen.add(value);
+      if(Array.isArray(value)){
+        for(let i=0;i<Math.min(value.length,80);i++)walk(value[i],source,path+"["+i+"]",depth+1);
+        return;
+      }
+      for(const [key,child] of Object.entries(value).slice(0,100)){
+        if(scoreKey.test(key)&&((typeof child==="number")||(typeof child==="string"))){
+          const n=typeof child==="number"?child:Number(String(child).replace(/,/g,""));
+          if(Number.isSafeInteger(n)&&n>=0&&n<=100000000){
+            output.push({score:n,source,path:path+"."+key,signature:localHash(value)});
+          }
+        }else if(child&&typeof child==="object")walk(child,source,path+"."+key,depth+1);
+      }
+    }
+  }
+  try{
+    const storage=ctx.win.localStorage;
+    for(let i=0;i<Math.min(storage.length,220);i++){
+      const key=storage.key(i)||"";
+      const raw=storage.getItem(key)||"";
+      if(raw.length>250000)continue;
+      try{walk(JSON.parse(raw),"localStorage",key,0);}catch{}
+    }
+  }catch{}
+  try{
+    if(ctx.win.indexedDB?.databases){
+      const databases=(await ctx.win.indexedDB.databases()).slice(0,8);
+      for(const metadata of databases){
+        if(!metadata.name)continue;
+        const db=await new Promise((resolve,reject)=>{
+          const request=ctx.win.indexedDB.open(metadata.name);
+          request.onsuccess=()=>resolve(request.result);
+          request.onerror=()=>reject(request.error||new Error("IndexedDB open failed"));
+          request.onblocked=()=>reject(new Error("IndexedDB open blocked"));
+        });
+        try{
+          for(const storeName of Array.from(db.objectStoreNames).slice(0,12)){
+            const records=await new Promise((resolve,reject)=>{
+              const tx=db.transaction(storeName,"readonly");
+              const request=tx.objectStore(storeName).getAll(undefined,100);
+              request.onsuccess=()=>resolve(request.result||[]);
+              request.onerror=()=>reject(request.error||new Error("IndexedDB read failed"));
+            });
+            walk(records,"indexedDB",metadata.name+"."+storeName,0);
+          }
+        }finally{db.close();}
+      }
+    }
+  }catch{}
+  return output;
+}
+async function runLocalPolicy(policy){
+  let status=localReadStatus();
+  if(status.phase!=="game"&&status.phase!=="results"){
+    throw new Error("The embedded Cork7 game is not in an active Solo run. Enter APEX → Ride Solo, then start the trainer.");
+  }
+  $("c7SessionStatus").textContent="Starting a repeatable trial: restart the current run, then skip the gondola…";
+  const scoresBefore=await localReadSavedScores(status.ctx);
+  const beforeSignatures=new Set(scoresBefore.map(item=>item.signature+"|"+item.path+"|"+item.score));
+  await holdLocalKeys(["r"],2100);
+  await localSleep(900);
+  await holdLocalKeys(["f"],220);
+  await localSleep(1300);
+  status=localReadStatus();
+  if(status.phase!=="game")throw new Error("Cork7 did not return to an active ride after restart. No training score was saved.");
+  const started=Date.now();
+  for(let index=0;index<policy.events.length;index++){
+    const event=policy.events[index];
+    if(!localTraining)return {cancelled:true};
+    const lead=(Number(event.preloadMs)||420)+(Number(event.triggerLeadMs)||85);
+    await waitLocalUntil(started+Math.max(0,event.atMs-lead));
+    if(!localTraining)return {cancelled:true};
+    status=localReadStatus();
+    if(status.phase==="results")break;
+    $("c7SessionStatus").textContent="Playing "+(policy.name||"starter strategy")+" · jump "+(index+1)+" of "+policy.events.length;
+    await performLocalTakeoff(event);
+  }
+  const deadline=Date.now()+210000;
+  status=localReadStatus();
+  while(localTraining&&Date.now()<deadline&&status.phase!=="results"){
+    await localSleep(850);
+    status=localReadStatus();
+  }
+  if(!localTraining)return {cancelled:true};
+  if(status.phase!=="results"){
+    throw new Error("The game did not expose a results screen within 210 seconds. No score was guessed or recorded.");
+  }
+  let score=status.score;
+  let scoreSource=score==null?null:"visible game text";
+  if(score==null){
+    const scoresAfter=await localReadSavedScores(status.ctx);
+    const changed=scoresAfter.filter(item=>!beforeSignatures.has(item.signature+"|"+item.path+"|"+item.score));
+    if(changed.length){
+      const candidate=changed[changed.length-1];
+      score=candidate.score;
+      scoreSource="new saved run record: "+candidate.source+" / "+candidate.path;
+    }
+  }
+  if(score==null){
+    throw new Error("Cork7 reached its results screen, but the current score was not exposed in readable game text or a newly changed browser save record. Training paused rather than inventing a result.");
+  }
+  return {score,scoreSource,policy,capturedAt:new Date().toISOString()};
 }
 function updateLocalTrainerDisplay(){
-  const stats=$("c7TrainerStats");
-  if(stats)stats.textContent="Automated gameplay is not enabled. The embedded Cork7 player is available for normal browser use.";
+  $("c7TrainerStats").textContent=(localTraining?"AI TRAINING ON THIS COMPUTER":"AI STOPPED")+
+    " · Generation "+localTrainer.generation+
+    " · Verified runs "+localTrainer.runsFinished+
+    " · Best actual score "+(localTrainer.bestScore==null?"—":localTrainer.bestScore.toLocaleString())+
+    " · Best strategy "+(localTrainer.bestPolicy?.name||"not measured yet")+
+    " · Browser checkpoint saved"+(ownerAuthorized?" · Northflank sync enabled":" · remote sync locked");
   const strategy=$("c7CurrentStrategy");
-  if(strategy)strategy.textContent="Player preview mode";
-  const start=$("c7TrainStart");
-  if(start)start.textContent="Trainer unavailable";
+  if(strategy)strategy.textContent=localTraining
+    ?"Current strategy: "+(localCurrentPolicy||"preparing")
+    :"Next strategy: "+(localTrainer.runsFinished<CORK7_SEED_LIBRARY.length?CORK7_SEED_LIBRARY[localTrainer.runsFinished].name:"evolve the best verified strategy");
+  $("c7TrainStart").textContent=localTraining?"Training active":"Start AI trainer";
 }
 async function syncLocalTrainer(){
-  if(!ownerAuthorized)throw new Error("Owner access is required to save training data.");
+  saveLocalTrainerCache();
+  if(!ownerAuthorized)return false;
   const payload={
     training:localTraining,
     generation:localTrainer.generation,
@@ -753,11 +1198,78 @@ async function syncLocalTrainer(){
     bestPolicy:localTrainer.bestPolicy,
     history:localTrainer.history.slice(-80)
   };
-  await api("cork7-client-training","POST",payload);
-  updateLocalTrainerDisplay();
+  const fingerprint=JSON.stringify(payload);
+  if(fingerprint===trainerSyncFingerprint)return true;
+  if(trainerSyncInFlight)return trainerSyncInFlight;
+  trainerSyncInFlight=(async()=>{
+    try{
+      await api("cork7-client-training","POST",payload);
+      trainerSyncFingerprint=fingerprint;
+      $("c7Details").dataset.worker="online";
+      updateLocalTrainerDisplay();
+      return true;
+    }catch(error){
+      $("c7Details").dataset.worker="offline";
+      $("c7SessionStatus").textContent="Checkpoint saved in this browser. Northflank sync will retry: "+error.message;
+      return false;
+    }finally{
+      trainerSyncInFlight=null;
+    }
+  })();
+  return trainerSyncInFlight;
 }
 async function startLocalTraining(){
-  throw new Error("Automated gameplay training is not available in this build. The embedded player and dashboard remain operational.");
+  if(!ownerAuthorized)throw new Error("Unlock owner controls first.");
+  if(!localGameLoaded)await startCork7();
+  const status=localReadStatus();
+  if(status.phase!=="game"&&status.phase!=="results"){
+    throw new Error("Cork7 is open on this computer, but it is not in an active APEX Solo run yet. Complete the Solo → APEX → Ride Solo selection in the game panel, then press Start AI trainer.");
+  }
+  if(localTraining)return;
+  localTraining=true;
+  updateLocalTrainerDisplay();
+  refreshOwnerControls();
+  await syncLocalTrainer();
+  localTrainingTask=(async()=>{
+    while(localTraining){
+      const policy=nextLocalPolicy();
+      try{
+        localCurrentPolicy=policy.name||"starter strategy";
+        updateLocalTrainerDisplay();
+        const result=await runLocalPolicy(policy);
+        if(result.cancelled)break;
+        localTrainer.runsFinished++;
+        if(localTrainer.bestScore==null||result.score>localTrainer.bestScore){
+          localTrainer.bestScore=result.score;
+          localTrainer.bestPolicy=policy;
+        }
+        localTrainer.history.push({
+          run:localTrainer.runsFinished,
+          generation:localTrainer.generation,
+          score:result.score,
+          best:localTrainer.bestScore,
+          policyName:policy.name||"unnamed strategy",
+          scoreSource:result.scoreSource||"game result",
+          capturedAt:result.capturedAt
+        });
+        if(localTrainer.history.length>80)localTrainer.history.shift();
+        localTrainer.generation=1+Math.floor(Math.max(0,localTrainer.runsFinished-CORK7_SEED_LIBRARY.length)/6);
+        saveLocalTrainerCache();
+        $("c7SessionStatus").textContent="Actual Cork7 run "+localTrainer.runsFinished+" completed. Score captured: "+result.score.toLocaleString()+". The next policy is being tested.";
+        updateLocalTrainerDisplay();
+        await syncLocalTrainer();
+        await localSleep(900);
+      }catch(error){
+        localTraining=false;
+        $("c7SessionStatus").textContent="Training paused: "+error.message;
+        break;
+      }
+    }
+    releaseLocalKeys();
+    updateLocalTrainerDisplay();
+    refreshOwnerControls();
+    try{await syncLocalTrainer();}catch(error){$("c7SessionStatus").textContent+=" Checkpoint sync failed: "+error.message;}
+  })();
 }
 async function stopLocalTraining(){
   localTraining=false;
@@ -827,8 +1339,12 @@ $("c7TrainStart").addEventListener("click",()=>trainCork7("train-start"));
 $("c7TrainPause").addEventListener("click",()=>trainCork7("train-pause"));
 $("c7Stop").addEventListener("click",stopCork7);
 document.querySelectorAll("[data-c7key]").forEach(button=>button.addEventListener("click",()=>actCork7(button.dataset.c7key)));
+loadLocalTrainerCache();
+updateLocalTrainerDisplay();
 checkOwnerSession();
 observeCork7();
+setInterval(observeCork7,12000);
+window.addEventListener("pagehide",()=>{localTraining=false;releaseLocalKeys();saveLocalTrainerCache();});
 })();
 </script>
 </body>

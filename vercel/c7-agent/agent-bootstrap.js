@@ -114,6 +114,8 @@
       const counts = { delivered:0, errors:0, firstError:null };
       let currentTarget = null, phase = 0;
       const preventDefault = event.preventDefault.bind(event);
+      const nativeStopPropagation = event.stopPropagation.bind(event);
+      const nativeStopImmediatePropagation = event.stopImmediatePropagation.bind(event);
       Object.defineProperties(event, {
         target:{ configurable:true, get:()=>target },
         srcElement:{ configurable:true, get:()=>target },
@@ -121,8 +123,8 @@
         eventPhase:{ configurable:true, get:()=>phase },
         composedPath:{ configurable:true, value:()=>path.slice() },
         preventDefault:{ configurable:true, value:function(){ if(!flags.passive) preventDefault(); } },
-        stopPropagation:{ configurable:true, value:function(){ flags.stopped=true; } },
-        stopImmediatePropagation:{ configurable:true, value:function(){ flags.stopped=true; flags.immediate=true; } }
+        stopPropagation:{ configurable:true, value:function(){ flags.stopped=true; nativeStopPropagation(); } },
+        stopImmediatePropagation:{ configurable:true, value:function(){ flags.stopped=true; flags.immediate=true; nativeStopImmediatePropagation(); } }
       });
 
       function invokeAt(node, capture, eventPhase) {
@@ -182,12 +184,22 @@
       status() {
         const down = listeners.filter(x => x.active && x.type === "keydown").length;
         const up = listeners.filter(x => x.active && x.type === "keyup").length;
-        const properties = [win,win.document,win.document.documentElement,win.document.body];
+        const doc = win.document;
+        const canvases = Array.from(doc.querySelectorAll("canvas"));
+        canvases.sort((a,b) => {
+          const ra=a.getBoundingClientRect(), rb=b.getBoundingClientRect();
+          return rb.width*rb.height-ra.width*ra.height;
+        });
+        const targets = new Set([win,doc,doc.documentElement,doc.body]);
+        if (canvases[0]) for (const target of buildPath(canvases[0])) targets.add(target);
+        const propertyKeydown = Array.from(targets).filter(x=>typeof x?.onkeydown==="function").length;
+        const propertyKeyup = Array.from(targets).filter(x=>typeof x?.onkeyup==="function").length;
         return {
           ready:true, version:VERSION,
-          keydownCount:down+properties.filter(x=>typeof x?.onkeydown==="function").length,
-          keyupCount:up+properties.filter(x=>typeof x?.onkeyup==="function").length,
-          registeredKeydown:down, registeredKeyup:up
+          keydownCount:down+propertyKeydown,
+          keyupCount:up+propertyKeyup,
+          registeredKeydown:down, registeredKeyup:up,
+          propertyKeydown, propertyKeyup
         };
       },
       send

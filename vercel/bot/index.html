@@ -1342,9 +1342,25 @@ async function runNoTrickCompletionTest(){
     $("c7SessionStatus").textContent="Test Bot is preparing a fresh APEX run. It will only use R to restart and F to skip the gondola.";
     releaseLocalKeys();
     await holdLocalKeys(["r"],2100);
+    if(!completionTestRunning){
+      await finishCompletionTest("stopped","Test stopped during the restart sequence. No completion was credited.",attemptStarted);
+      return;
+    }
     await localSleep(900);
+    if(!completionTestRunning){
+      await finishCompletionTest("stopped","Test stopped before starting the new run. No completion was credited.",attemptStarted);
+      return;
+    }
     await holdLocalKeys(["f"],220);
+    if(!completionTestRunning){
+      await finishCompletionTest("stopped","Test stopped before the ride began. No completion was credited.",attemptStarted);
+      return;
+    }
     await localSleep(1600);
+    if(!completionTestRunning){
+      await finishCompletionTest("stopped","Test stopped before run monitoring began. No completion was credited.",attemptStarted);
+      return;
+    }
     let status=localReadStatus();
     if(status.phase!=="game"){
       throw new Error("The restart / gondola-skip sequence did not return to an active game. No completion was recorded.");

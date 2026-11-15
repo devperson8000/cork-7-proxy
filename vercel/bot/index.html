@@ -1023,12 +1023,13 @@ function getLocalGameCanvas(doc){
 }
 function localReadStatus(){
   const ctx=getLocalGameContext();
+  diagAttachGameFrame(ctx);
   const text=localGameText(ctx);
   const canvas=getLocalGameCanvas(ctx.doc);
   const canvasCount=ctx.doc.querySelectorAll("canvas").length;
   let frameDocumentUrl="";
   try{frameDocumentUrl=ctx.doc.location.href;}catch{}
-  return {
+  const status={
     ctx,text,canvasCount,
     score:localDetectScore(text),
     phase:localDetectPhase(text,canvasCount),
@@ -1038,6 +1039,8 @@ function localReadStatus(){
     frameUrl:ctx.frame.src||"",
     frameDocumentUrl
   };
+  diagObserveStatus(status);
+  return status;
 }
 function renderLocalStatus(status){
   localGameLoaded=true;
@@ -1120,6 +1123,7 @@ async function tryEnterSolo(){
   try{return localReadStatus();}catch{return null;}
 }
 async function startCork7(){
+  diagRecord("local-game-open-requested",{ownerAuthorized:ownerAuthorized});
   if(!ownerAuthorized)throw new Error("Unlock owner controls before opening the local training session.");
   if(localGameLoading)return;
   localGameLoading=true;
@@ -1202,7 +1206,12 @@ function dispatchLocalKey(ctx,key,type){
     Object.defineProperty(event,"keyCode",{get:()=>info.keyCode});
     Object.defineProperty(event,"which",{get:()=>info.keyCode});
   }catch{}
-  target.dispatchEvent(event);
+  const dispatchReturn=target.dispatchEvent(event);
+  diagRecord("synthetic-key-dispatch",{
+    key:info.key,code:info.code,type:type,trusted:!!event.isTrusted,
+    dispatchReturn:dispatchReturn,defaultPrevented:!!event.defaultPrevented,
+    target:diagTargetName(target),focus:diagFocusInfo(ctx)
+  });
 }
 function releaseLocalKeys(){
   if(!localGameLoaded)return;
@@ -1213,6 +1222,8 @@ function releaseLocalKeys(){
   localActiveKeys.clear();
 }
 async function holdLocalKeys(keys,durationMs){
+  diagRecord("key-hold-requested",{keys:Array.isArray(keys)?keys.slice(0,8):[],durationMs:durationMs,
+    source:completionTestRunning?"completion-test":localTraining?"score-trainer":"manual-or-restart"});
   const ctx=getLocalGameContext();
   const normalized=[...new Set(keys)];
   try{
@@ -1226,6 +1237,9 @@ async function holdLocalKeys(keys,durationMs){
   }
 }
 async function performLocalTakeoff(event){
+  diagRecord("takeoff-policy-dispatched",{keys:Array.isArray(event.keys)?event.keys.slice(0,8):[],
+    grabs:Array.isArray(event.grabSequence)?event.grabSequence.slice(0,4):[],atMs:event.atMs||null,
+    training:localTraining,completionTest:completionTestRunning});
   const ctx=getLocalGameContext();
   const grabKeys=new Set(["q","e","Shift"]);
   const trickKeys=[...new Set((event.keys||[]).filter(key=>!grabKeys.has(key)))];
@@ -1282,6 +1296,7 @@ function confirmLocalRide(){
   if(localTraining||completionTestRunning)throw new Error("Stop the current bot task before changing ride confirmation.");
   const status=localReadStatus();
   if(localRideConfirmed){
+    diagRecord("ride-confirmation-cleared",{focus:diagFocusInfo(status.ctx)});
     localRideConfirmed=false;
     $("c7ControlStatus").textContent="Ride confirmation cleared. All manual and automated game inputs are locked.";
     $("c7SessionStatus").textContent="Ride confirmation cleared. The dashboard will not send game keys.";
@@ -1294,6 +1309,7 @@ function confirmLocalRide(){
     throw new Error("Cork7 is not showing an active ride. Enter Solo → APEX → Ride Solo and reach the actual mountain before confirming.");
   }
   localRideConfirmed=true;
+  diagRecord("ride-confirmed",{phase:status.phase,canvasCount:status.canvasCount,focus:diagFocusInfo(status.ctx)});
   $("c7ControlStatus").textContent="Active ride confirmed by owner. Manual input, no-trick test and score training controls are now unlocked. Clear this confirmation if you return to a menu.";
   $("c7SessionStatus").textContent="Active APEX ride confirmed. No automatic input has been sent.";
   refreshOwnerControls();
@@ -1301,6 +1317,7 @@ function confirmLocalRide(){
   updateCompletionTestDisplay();
 }
 async function restartCork7(){
+  diagRecord("local-restart-requested",{rideConfirmed:localRideConfirmed});
   if(!ownerAuthorized)throw new Error("Owner access is required.");
   if(!localRideConfirmed)throw new Error("Confirm the active APEX Solo ride before restarting.");
   await holdLocalKeys(["r"],2100);
@@ -1310,6 +1327,7 @@ async function restartCork7(){
   try{renderLocalStatus(localReadStatus());}catch{}
 }
 async function actCork7(key){
+  diagRecord("manual-key-button-clicked",{key:key,rideConfirmed:localRideConfirmed});
   if(!ownerAuthorized)throw new Error("Owner access is required.");
   if(!localRideConfirmed)throw new Error("Confirm the active APEX Solo ride before using manual controls.");
   const status=localReadStatus();
@@ -1628,6 +1646,7 @@ async function syncLocalTrainer(){
   return trainerSyncInFlight;
 }
 async function finishCompletionTest(outcome,detail,runStarted){
+  diagRecord("completion-test-finished",{outcome:outcome,detail:String(detail||"").slice(0,180)});
   completionTestRunning=false;
   const at=new Date().toISOString();
   const elapsedMs=Math.max(0,Date.now()-(runStarted||Date.now()));
@@ -1658,6 +1677,7 @@ async function finishCompletionTest(outcome,detail,runStarted){
   await syncLocalTrainer();
 }
 async function runNoTrickCompletionTest(){
+  diagRecord("completion-test-started",{gameLoaded:localGameLoaded,rideConfirmed:localRideConfirmed});
   if(!ownerAuthorized)throw new Error("Unlock owner controls before running the test.");
   if(localTraining)throw new Error("Stop score training before starting the separate completion test.");
   if(completionTestRunning)return;
@@ -1876,6 +1896,7 @@ $("c7TrainStart").addEventListener("click",()=>trainCork7("train-start"));
 $("c7TrainPause").addEventListener("click",()=>trainCork7("train-pause"));
 $("c7Stop").addEventListener("click",stopCork7);
 document.querySelectorAll("[data-c7key]").forEach(button=>button.addEventListener("click",()=>actCork7(button.dataset.c7key)));
+installC7Diagnostics();
 installGameFocusProtection();
 loadLocalTrainerCache();
 updateLocalTrainerDisplay();

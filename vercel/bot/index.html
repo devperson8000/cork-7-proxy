@@ -467,6 +467,7 @@ let localGameLoading=false;
 let localGameLoaded=false;
 let localTraining=false;
 let completionTestRunning=false;
+let remoteCompletionSyncAvailable=false;
 let localCompletion={attempts:0,completedRuns:0,lastOutcome:"not-run",lastAt:null,baseline:null,history:[]};
 let localTrainer={generation:1,runsFinished:0,bestScore:null,bestPolicy:null,history:[]};
 let localCurrentPolicy="";
@@ -842,6 +843,7 @@ async function observeCork7(){
     const remote=await api("cork7-status");
     renderCork7(remote);
     if(remote.trainer){
+      remoteCompletionSyncAvailable=!!remote.trainer.completionTest;
       const shouldSync=mergeRemoteTrainer(remote.trainer);
       updateLocalTrainerDisplay();
       updateCompletionTestDisplay();
@@ -1249,7 +1251,8 @@ function updateCompletionTestDisplay(){
     " · Completed "+localCompletion.completedRuns+
     " · Completion baseline "+(baseline?"VERIFIED ("+elapsed+")":"NOT YET VERIFIED")+
     (localCompletion.lastAt?" · Last result "+new Date(localCompletion.lastAt).toLocaleString():"")+
-    (last==="completed"?" · Cork7 results screen detected; score ignored.":"");
+    (last==="completed"?" · Cork7 results screen detected; score ignored.":"")+
+    (remoteCompletionSyncAvailable?" · Northflank baseline synced":" · Browser-saved; Northflank baseline sync pending");
   $("c7TestStart").textContent=completionTestRunning?"Test running…":"Test Bot · No Tricks";
   $("c7TestStop").textContent=completionTestRunning?"Stop test":"Stop test";
 }
@@ -1270,7 +1273,8 @@ async function syncLocalTrainer(){
   if(trainerSyncInFlight)return trainerSyncInFlight;
   trainerSyncInFlight=(async()=>{
     try{
-      await api("cork7-client-training","POST",payload);
+      const synced=await api("cork7-client-training","POST",payload);
+      remoteCompletionSyncAvailable=!!synced?.trainer?.completionTest;
       trainerSyncFingerprint=fingerprint;
       $("c7Details").dataset.worker="online";
       updateLocalTrainerDisplay();

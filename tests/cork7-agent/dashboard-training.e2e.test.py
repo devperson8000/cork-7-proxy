@@ -109,7 +109,7 @@ with sync_playwright() as p:
   page.wait_for_function("""before => {
     const game=document.getElementById('c7LocalPlayer').contentDocument.querySelector('.game-frame iframe').contentWindow;
     return game.__C7_KEYS__.length > before;
-  }""",key_count_before_run,timeout=5000)
+  }""",arg=key_count_before_run,timeout=5000)
   run_keys=page.evaluate("""before => {
     const game=document.getElementById('c7LocalPlayer').contentDocument.querySelector('.game-frame iframe').contentWindow;
     return game.__C7_KEYS__.slice(before,before+4);

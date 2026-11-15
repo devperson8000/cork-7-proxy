@@ -115,6 +115,15 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
           <button class="btn" id="c7TrainPause" data-owner-only disabled>Stop training</button>
         </div>
         <div class="realgame-status" id="c7TrainerStats">No Cork7 training runs yet. The browser runner tests timed trick-key policies against actual Cork7 results-screen scores and saves its best policy to Northflank.</div>
+        <div class="panel-meta">DIAGNOSTICS / FOCUS · INPUT · MENU · FRAME</div>
+        <div class="realgame-status" id="c7DiagStatus" aria-live="polite">Diagnostics starting…</div>
+        <div class="realgame-controls" style="gap:6px">
+          <button class="btn" id="c7DiagSnapshot">Capture snapshot</button>
+          <button class="btn" id="c7DiagCopy">Copy report</button>
+          <button class="btn" id="c7DiagExport">Download report</button>
+          <button class="btn danger" id="c7DiagClear">Clear trace</button>
+        </div>
+        <div class="realgame-status"><pre id="c7DiagOutput" style="white-space:pre-wrap;max-height:230px;overflow:auto;background:#081318;border:1px solid var(--line);border-radius:8px;padding:10px;color:#a9c3bf;font-size:9px">Waiting for browser and game-frame events…</pre></div>
         <div class="realgame-status"><pre id="c7PageText">Cork7 page text / HUD diagnostics will appear here.</pre></div>
       </div>
     </div>

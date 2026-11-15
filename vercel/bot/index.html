@@ -98,6 +98,12 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
           <div>• Ten built-in strategies run first. After that, the best verified score guides small mutations.</div>
           <div id="c7CurrentStrategy" style="margin-top:7px;color:var(--muted)">Strategy queue: 10 starter patterns, then score-based evolution.</div>
         </div>
+        <div class="panel-meta">RUN COMPLETION CHECK / NO TRICKS</div>
+        <div class="realgame-controls">
+          <button class="btn primary" id="c7TestStart" data-owner-only>Test Bot · No Tricks</button>
+          <button class="btn" id="c7TestStop" data-owner-only disabled>Stop test</button>
+        </div>
+        <div class="realgame-status" id="c7CompletionStats" aria-live="polite">No completion test yet. The bot will use only restart and gondola-skip controls, then ride hands-off until Cork7 shows its results screen.</div>
         <div class="panel-meta">REAL-GAME SCORE TRAINER / EXPERIMENTAL</div>
         <div class="realgame-controls">
           <button class="btn primary" id="c7TrainStart" data-owner-only disabled>Start AI trainer</button>
@@ -460,6 +466,8 @@ let ownerAuthorized=false;
 let localGameLoading=false;
 let localGameLoaded=false;
 let localTraining=false;
+let completionTestRunning=false;
+let localCompletion={attempts:0,completedRuns:0,lastOutcome:"not-run",lastAt:null,baseline:null,history:[]};
 let localTrainer={generation:1,runsFinished:0,bestScore:null,bestPolicy:null,history:[]};
 let localCurrentPolicy="";
 let localLastAction="";
@@ -472,6 +480,29 @@ let localTrainerCacheFound=false;
 let trainerSyncFingerprint="";
 let trainerSyncInFlight=null;
 
+function normalizeCompletionTest(value){
+  const source=value&&typeof value==="object"?value:{};
+  const allowed=["not-run","running","completed","incomplete","stopped"];
+  const baseline=source.baseline&&source.baseline.mode==="no-tricks"&&typeof source.baseline.completedAt==="string"
+    ?{mode:"no-tricks",completedAt:source.baseline.completedAt.slice(0,40),elapsedMs:Math.max(0,Math.floor(Number(source.baseline.elapsedMs)||0)),source:"actual-results-screen"}
+    :null;
+  const history=Array.isArray(source.history)?source.history.slice(-12).filter(item=>
+    item&&["completed","incomplete","stopped"].includes(item.outcome)&&typeof item.at==="string"
+  ).map(item=>({
+    outcome:item.outcome,
+    at:item.at.slice(0,40),
+    elapsedMs:Math.max(0,Math.floor(Number(item.elapsedMs)||0)),
+    detail:String(item.detail||"").slice(0,180)
+  })):[];
+  return {
+    attempts:Math.max(0,Math.min(1000000,Math.floor(Number(source.attempts)||0))),
+    completedRuns:Math.max(0,Math.min(1000000,Math.floor(Number(source.completedRuns)||0))),
+    lastOutcome:allowed.includes(source.lastOutcome)?source.lastOutcome:"not-run",
+    lastAt:typeof source.lastAt==="string"?source.lastAt.slice(0,40):null,
+    baseline,
+    history
+  };
+}
 function saveLocalTrainerCache(){
   try{
     const value={
@@ -481,6 +512,7 @@ function saveLocalTrainerCache(){
       bestScore:localTrainer.bestScore,
       bestPolicy:localTrainer.bestPolicy,
       history:localTrainer.history.slice(-80),
+      completionTest:localCompletion,
       savedAt:new Date().toISOString()
     };
     localStorage.setItem(LOCAL_TRAINER_KEY,JSON.stringify(value));
@@ -511,6 +543,7 @@ function loadLocalTrainerCache(){
       bestPolicy:policy,
       history
     };
+    localCompletion=normalizeCompletionTest(value.completionTest);
     localTrainerCacheFound=true;
     localTraining=false;
     return true;
@@ -527,6 +560,13 @@ function mergeRemoteTrainer(remote){
   const localScore=localTrainer.bestScore;
   const remoteHistory=Array.isArray(remote.history)?remote.history.slice(-80):[];
   const remotePolicy=remote.bestPolicy&&Array.isArray(remote.bestPolicy.events)?remote.bestPolicy:null;
+  const remoteCompletion=normalizeCompletionTest(remote.completionTest);
+  const remoteCompletionTime=Date.parse(remoteCompletion.lastAt||"")||0;
+  const localCompletionTime=Date.parse(localCompletion.lastAt||"")||0;
+  if(remoteCompletion.attempts>localCompletion.attempts||
+    (remoteCompletion.attempts===localCompletion.attempts&&remoteCompletionTime>localCompletionTime)){
+    localCompletion=remoteCompletion;
+  }
   const hadLocal=localTrainerCacheFound;
   if(!hadLocal||remoteRuns>localRuns){
     localTrainer={
@@ -572,9 +612,11 @@ function setOwnerStatus(message,isError=false){
 function refreshOwnerControls(){
   const state={
     c7Start:localGameLoading||localGameLoaded,
-    c7Restart:!localGameLoaded||localTraining,
-    c7Stop:!localGameLoaded,
-    c7TrainStart:!localGameLoaded||localTraining,
+    c7Restart:!localGameLoaded||localTraining||completionTestRunning,
+    c7Stop:!localGameLoaded||completionTestRunning,
+    c7TestStart:localGameLoading||localTraining||completionTestRunning,
+    c7TestStop:!completionTestRunning,
+    c7TrainStart:!localGameLoaded||localTraining||completionTestRunning||!localCompletion.baseline,
     c7TrainPause:!localTraining
   };
   for(const [id,disabled] of Object.entries(state)){
@@ -694,7 +736,9 @@ function localReadStatus(){
 function renderLocalStatus(status){
   localGameLoaded=true;
   $("c7Phase").textContent="LOCAL / "+String(status.phase||"READY").toUpperCase();
-  $("c7SessionStatus").textContent="Embedded Cork7 game is connected. "+(localLastAction||"Ready for game input.");
+  if(!localTraining&&!completionTestRunning){
+    $("c7SessionStatus").textContent="Embedded Cork7 game is connected. "+(localLastAction||"Ready for game input.");
+  }
   $("c7Details").textContent="LOCAL COMPUTER · "+status.phase.toUpperCase()+
     " · Score "+(status.score==null?"not readable yet":status.score.toLocaleString())+
     " · Canvas "+status.canvasCount+
@@ -1177,15 +1221,35 @@ async function runLocalPolicy(policy){
 function updateLocalTrainerDisplay(){
   $("c7TrainerStats").textContent=(localTraining?"AI TRAINING ON THIS COMPUTER":"AI STOPPED")+
     " · Generation "+localTrainer.generation+
-    " · Verified runs "+localTrainer.runsFinished+
+    " · Verified score runs "+localTrainer.runsFinished+
     " · Best actual score "+(localTrainer.bestScore==null?"—":localTrainer.bestScore.toLocaleString())+
     " · Best strategy "+(localTrainer.bestPolicy?.name||"not measured yet")+
+    " · Run completion baseline "+(localCompletion.baseline?"verified":"not verified")+
     " · Browser checkpoint saved"+(ownerAuthorized?" · Northflank sync enabled":" · remote sync locked");
   const strategy=$("c7CurrentStrategy");
   if(strategy)strategy.textContent=localTraining
     ?"Current strategy: "+(localCurrentPolicy||"preparing")
-    :"Next strategy: "+(localTrainer.runsFinished<CORK7_SEED_LIBRARY.length?CORK7_SEED_LIBRARY[localTrainer.runsFinished].name:"evolve the best verified strategy");
+    :!localCompletion.baseline
+      ?"Run Test Bot · No Tricks first to verify one complete run."
+      :"Next strategy: "+(localTrainer.runsFinished<CORK7_SEED_LIBRARY.length?CORK7_SEED_LIBRARY[localTrainer.runsFinished].name:"evolve the best verified strategy");
   $("c7TrainStart").textContent=localTraining?"Training active":"Start AI trainer";
+}
+function updateCompletionTestDisplay(){
+  const baseline=localCompletion.baseline;
+  const last=localCompletion.lastOutcome;
+  const state=completionTestRunning?"TEST RUNNING · HANDS-OFF / NO TRICKS":
+    last==="completed"?"LAST TEST COMPLETED":
+    last==="incomplete"?"LAST TEST DID NOT COMPLETE":
+    last==="stopped"?"LAST TEST STOPPED":"NOT TESTED";
+  const elapsed=baseline?Math.round(baseline.elapsedMs/1000)+"s":"—";
+  $("c7CompletionStats").textContent=state+
+    " · Attempts "+localCompletion.attempts+
+    " · Completed "+localCompletion.completedRuns+
+    " · Completion baseline "+(baseline?"VERIFIED ("+elapsed+")":"NOT YET VERIFIED")+
+    (localCompletion.lastAt?" · Last result "+new Date(localCompletion.lastAt).toLocaleString():"")+
+    (last==="completed"?" · Cork7 results screen detected; score ignored.":"");
+  $("c7TestStart").textContent=completionTestRunning?"Test running…":"Test Bot · No Tricks";
+  $("c7TestStop").textContent=completionTestRunning?"Stop test":"Stop test";
 }
 async function syncLocalTrainer(){
   saveLocalTrainerCache();
@@ -1196,7 +1260,8 @@ async function syncLocalTrainer(){
     runsFinished:localTrainer.runsFinished,
     bestScore:localTrainer.bestScore,
     bestPolicy:localTrainer.bestPolicy,
-    history:localTrainer.history.slice(-80)
+    history:localTrainer.history.slice(-80),
+    completionTest:localCompletion
   };
   const fingerprint=JSON.stringify(payload);
   if(fingerprint===trainerSyncFingerprint)return true;
@@ -1218,8 +1283,120 @@ async function syncLocalTrainer(){
   })();
   return trainerSyncInFlight;
 }
+async function finishCompletionTest(outcome,detail,runStarted){
+  completionTestRunning=false;
+  const at=new Date().toISOString();
+  const elapsedMs=Math.max(0,Date.now()-(runStarted||Date.now()));
+  localCompletion.lastOutcome=outcome;
+  localCompletion.lastAt=at;
+  if(outcome==="completed"){
+    localCompletion.completedRuns++;
+    localCompletion.baseline={
+      mode:"no-tricks",
+      completedAt:at,
+      elapsedMs,
+      source:"actual-results-screen"
+    };
+  }
+  localCompletion.history.push({
+    outcome,
+    at,
+    elapsedMs,
+    detail:String(detail||"").slice(0,180)
+  });
+  if(localCompletion.history.length>12)localCompletion.history.shift();
+  saveLocalTrainerCache();
+  $("c7SessionStatus").textContent=detail;
+  $("c7Details").textContent="TEST BOT · "+outcome.toUpperCase()+" · "+(outcome==="completed"?"Real results screen verified":"No completion baseline added");
+  updateCompletionTestDisplay();
+  updateLocalTrainerDisplay();
+  refreshOwnerControls();
+  await syncLocalTrainer();
+}
+async function runNoTrickCompletionTest(){
+  if(!ownerAuthorized)throw new Error("Unlock owner controls before running the test.");
+  if(localTraining)throw new Error("Stop score training before starting the separate completion test.");
+  if(completionTestRunning)return;
+  if(!localGameLoaded)await startCork7();
+  let initial=localReadStatus();
+  if(initial.phase!=="game"&&initial.phase!=="results"){
+    throw new Error("Open Cork7 and enter Solo → APEX → Ride Solo first. The test needs an active run or results screen.");
+  }
+  completionTestRunning=true;
+  const attemptStarted=Date.now();
+  localCompletion.attempts++;
+  localCompletion.lastOutcome="running";
+  localCompletion.lastAt=new Date().toISOString();
+  saveLocalTrainerCache();
+  updateCompletionTestDisplay();
+  refreshOwnerControls();
+  await syncLocalTrainer();
+  let runStarted=0;
+  try{
+    $("c7SessionStatus").textContent="Test Bot is preparing a fresh APEX run. It will only use R to restart and F to skip the gondola.";
+    releaseLocalKeys();
+    await holdLocalKeys(["r"],2100);
+    await localSleep(900);
+    await holdLocalKeys(["f"],220);
+    await localSleep(1600);
+    let status=localReadStatus();
+    if(status.phase!=="game"){
+      throw new Error("The restart / gondola-skip sequence did not return to an active game. No completion was recorded.");
+    }
+    runStarted=Date.now();
+    localLastAction="Test Bot navigation only: R restart + F gondola skip. No trick inputs.";
+    $("c7SessionStatus").textContent="Test Bot is riding hands-off. No steering, pop, spin, flip or grab keys will be sent. Waiting for Cork7's real results screen.";
+    $("c7Details").textContent="TEST BOT · NO TRICKS · WAITING FOR RESULTS";
+    const deadline=runStarted+300000;
+    while(completionTestRunning&&Date.now()<deadline){
+      await localSleep(1000);
+      status=localReadStatus();
+      renderLocalStatus(status);
+      if(status.phase==="results"){
+        await finishCompletionTest("completed",
+          "Test completed. Cork7's results screen was detected after a no-trick, hands-off run. This is now the saved run-completion baseline; no score was used.",
+          runStarted);
+        return;
+      }
+      if(status.phase==="lobby"||status.phase==="park-select"){
+        await finishCompletionTest("incomplete",
+          "The game returned to a menu before showing results. The test did not count as a completed run.",
+          runStarted);
+        return;
+      }
+      updateCompletionTestDisplay();
+    }
+    if(!completionTestRunning){
+      await finishCompletionTest("stopped","Test stopped. No completion was credited.",runStarted||attemptStarted);
+      return;
+    }
+    await finishCompletionTest("incomplete",
+      "No Cork7 results screen appeared within five minutes. The test is marked incomplete; no score or completion was guessed.",
+      runStarted||attemptStarted);
+  }catch(error){
+    await finishCompletionTest("incomplete","Test could not verify a completed run: "+error.message,runStarted||attemptStarted);
+  }finally{
+    completionTestRunning=false;
+    releaseLocalKeys();
+    updateCompletionTestDisplay();
+    updateLocalTrainerDisplay();
+    refreshOwnerControls();
+  }
+}
+async function stopCompletionTest(){
+  if(!completionTestRunning)return;
+  completionTestRunning=false;
+  releaseLocalKeys();
+  $("c7SessionStatus").textContent="Stop requested. The test will close without recording a completion.";
+  updateCompletionTestDisplay();
+  refreshOwnerControls();
+}
 async function startLocalTraining(){
   if(!ownerAuthorized)throw new Error("Unlock owner controls first.");
+  if(!localCompletion.baseline){
+    throw new Error("Run the separate Test Bot · No Tricks check first. Score training stays locked until a real Cork7 results screen confirms that a full run can be completed.");
+  }
+  if(completionTestRunning)throw new Error("Stop the completion test before starting score training.");
   if(!localGameLoaded)await startCork7();
   const status=localReadStatus();
   if(status.phase!=="game"&&status.phase!=="results"){
@@ -1295,6 +1472,7 @@ async function trainCork7(action){
 }
 async function stopCork7(){
   if(!ownerAuthorized)throw new Error("Owner access is required.");
+  await stopCompletionTest();
   await stopLocalTraining();
   if(localStatusTimer){clearInterval(localStatusTimer);localStatusTimer=null;}
   localGameLoaded=false;
@@ -1335,16 +1513,32 @@ $("ownerPasscode").addEventListener("keydown",event=>{if(event.key==="Enter")log
 $("c7Start").addEventListener("click",startCork7);
 $("c7Observe").addEventListener("click",observeCork7);
 $("c7Restart").addEventListener("click",restartCork7);
+$("c7TestStart").addEventListener("click",()=>runNoTrickCompletionTest().catch(error=>{
+  $("c7SessionStatus").textContent=error.message;
+}));
+$("c7TestStop").addEventListener("click",stopCompletionTest);
 $("c7TrainStart").addEventListener("click",()=>trainCork7("train-start"));
 $("c7TrainPause").addEventListener("click",()=>trainCork7("train-pause"));
 $("c7Stop").addEventListener("click",stopCork7);
 document.querySelectorAll("[data-c7key]").forEach(button=>button.addEventListener("click",()=>actCork7(button.dataset.c7key)));
 loadLocalTrainerCache();
 updateLocalTrainerDisplay();
+updateCompletionTestDisplay();
 checkOwnerSession();
 observeCork7();
 setInterval(observeCork7,12000);
-window.addEventListener("pagehide",()=>{localTraining=false;releaseLocalKeys();saveLocalTrainerCache();});
+window.addEventListener("pagehide",()=>{
+  if(completionTestRunning){
+    localCompletion.lastOutcome="stopped";
+    localCompletion.lastAt=new Date().toISOString();
+    localCompletion.history.push({outcome:"stopped",at:localCompletion.lastAt,elapsedMs:0,detail:"Dashboard page closed during test"});
+    if(localCompletion.history.length>12)localCompletion.history.shift();
+  }
+  completionTestRunning=false;
+  localTraining=false;
+  releaseLocalKeys();
+  saveLocalTrainerCache();
+});
 })();
 </script>
 </body>

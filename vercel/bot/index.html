@@ -1049,6 +1049,7 @@ function localReadStatus(){
     canvasSize:canvas?{width:canvas.width,height:canvas.height}:null,
     activeElement:(ctx.doc.activeElement?.tagName||"").toLowerCase(),
     frameUrl:ctx.frame.src||"",
+    inputAgent:(()=>{try{return ctx.win.__CORK7_AGENT__?.status?.()||null;}catch{return null;}})(),
     frameDocumentUrl
   };
   diagObserveStatus(status);
@@ -1063,6 +1064,7 @@ function renderLocalStatus(status){
   $("c7Details").textContent="LOCAL COMPUTER · "+status.phase.toUpperCase()+
     " · Score "+(status.score==null?"not readable yet":status.score.toLocaleString())+
     " · Canvas "+status.canvasCount+
+    (status.inputAgent?" · Key handlers "+status.inputAgent.keydownCount+"/"+status.inputAgent.keyupCount:" · Input agent pending")+
     (status.canvasSize?" · "+status.canvasSize.width+"×"+status.canvasSize.height:"");
   $("c7PageText").textContent="LOCAL GAME DIAGNOSTICS\nPage: "+status.title+
     "\nPhase: "+status.phase+
@@ -1077,7 +1079,7 @@ function renderLocalStatus(status){
 async function waitForLocalGame(timeoutMs=60000){
   const host=$("c7LocalPlayer");
   if(!host.src||host.src==="about:blank"||host.src.endsWith("about:blank")){
-    host.src="/c7/";
+    host.src="/c7-agent/";
     $("c7ScreenEmpty").style.display="none";
   }
   host.classList.add("is-open");
@@ -1144,9 +1146,14 @@ async function startCork7(){
   try{
     const ready=await waitForLocalGame();
     localRideConfirmed=false;
-    renderLocalStatus(ready);
-    $("c7SessionStatus").textContent="Cork7 is open. Navigate to Solo → APEX → Ride Solo yourself. The dashboard will not click menus or send keys until you confirm the rider is on an active run.";
-    $("c7ControlStatus").textContent="Player loaded. Enter the actual APEX Solo run, then press Confirm active APEX run. Do not confirm while a menu is visible.";
+    await tryEnterSolo();
+    const latest=localReadStatus();
+    renderLocalStatus(latest||ready);
+    const input=latest?.inputAgent;
+    $("c7SessionStatus").textContent=input?.ready
+      ?"Cork7 loaded. Browser input hook attached: "+input.keydownCount+" keydown / "+input.keyupCount+" keyup handlers. If the menu remains, enter Solo → APEX → Ride Solo, then confirm the active run."
+      :"Cork7 loaded, but game keyboard handlers were not detected. The bot will not start until a usable control path is found.";
+    $("c7ControlStatus").textContent="Browser agent: "+(input?.ready?input.keydownCount+" keydown / "+input.keyupCount+" keyup handlers":"not ready")+". Enter an actual APEX Solo run and confirm it before testing controls.";
     startLocalStatusPolling();
   }catch(error){
     localPageError=error.message;
@@ -1201,29 +1208,23 @@ function localKeyCode(key){
   return map[key]||{key,code:"Key"+String(key).toUpperCase(),keyCode:String(key).toUpperCase().charCodeAt(0)};
 }
 function dispatchLocalKey(ctx,key,type){
-  const info=localKeyCode(key);
-  try{ctx.frame.focus();ctx.win.focus();}catch{}
   const canvas=getLocalGameCanvas(ctx.doc);
+  const agent=ctx.win.__CORK7_AGENT__;
+  if(!agent||typeof agent.send!=="function"){
+    const boot=ctx.playerDoc.defaultView?.__CORK7_AGENT_BOOT_STATUS__;
+    throw new Error(boot?.reason||"Cork7's early browser input agent is not attached. Refresh the player and check its status.");
+  }
   if(!canvas)throw new Error("No visible Cork7 game canvas was found inside the embedded game frame.");
-  if(canvas.tabIndex<0)canvas.tabIndex=0;
-  try{ctx.host.focus({preventScroll:true});}catch{}
-  try{ctx.frame.focus({preventScroll:true});ctx.win.focus();}catch{}
-  try{canvas.focus({preventScroll:true});}catch{}
-  const target=canvas;
-  const event=new ctx.win.KeyboardEvent(type,{
-    key:info.key,code:info.code,keyCode:info.keyCode,which:info.keyCode,
-    bubbles:true,cancelable:true,composed:true
+  const result=agent.send(key,type,canvas);
+  diagRecord("game-agent-input",{
+    key:String(key),type:String(type),
+    delivered:result?.delivered||0,errors:result?.errors||0,
+    trusted:result?.trusted===true,defaultPrevented:!!result?.defaultPrevented
   });
-  try{
-    Object.defineProperty(event,"keyCode",{get:()=>info.keyCode});
-    Object.defineProperty(event,"which",{get:()=>info.keyCode});
-  }catch{}
-  const dispatchReturn=target.dispatchEvent(event);
-  diagRecord("synthetic-key-dispatch",{
-    key:info.key,code:info.code,type:type,trusted:!!event.isTrusted,
-    dispatchReturn:dispatchReturn,defaultPrevented:!!event.defaultPrevented,
-    target:diagTargetName(target),focus:diagFocusInfo(ctx)
-  });
+  if(!result||!result.ok){
+    throw new Error("No Cork7 "+type+" handler received "+key+". The game may use another input system or require trusted hardware input. Training remains paused.");
+  }
+  return result;
 }
 function releaseLocalKeys(){
   if(!localGameLoaded)return;
@@ -1319,6 +1320,9 @@ function confirmLocalRide(){
   }
   if(status.canvasCount===0||status.phase==="lobby"||status.phase==="park-select"||status.phase==="loading"||status.phase==="results"){
     throw new Error("Cork7 is not showing an active ride. Enter Solo → APEX → Ride Solo and reach the actual mountain before confirming.");
+  }
+  if(!status.inputAgent?.ready||status.inputAgent.keydownCount<1||status.inputAgent.keyupCount<1){
+    throw new Error("The browser agent has not detected both keydown and keyup handlers inside Cork7. Controls remain locked.");
   }
   localRideConfirmed=true;
   diagRecord("ride-confirmed",{phase:status.phase,canvasCount:status.canvasCount,focus:diagFocusInfo(status.ctx)});

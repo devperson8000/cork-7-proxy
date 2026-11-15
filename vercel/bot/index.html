@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#081014">
-<title>APEX LAB — Cloud AI Control</title>
+<title>Cork7 Bot — Solo AI Trainer</title>
 <style>
 :root{color-scheme:dark;--bg:#071014;--panel:#0d191f;--panel2:#122229;--line:rgba(176,211,211,.13);--muted:#81979a;--text:#e9f3f1;--mint:#a6f0d1;--lime:#d3f36b;--cyan:#70d9dc;--orange:#ffb36b;--red:#ff8585;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
 *{box-sizing:border-box}html{background:var(--bg)}body{margin:0;min-height:100vh;color:var(--text);background:radial-gradient(ellipse at 50% -15%,rgba(65,129,127,.19),transparent 48%),linear-gradient(180deg,#081217,#071014 58%);font-size:14px}
@@ -30,16 +30,18 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
 .c7-local-frame-wrap iframe{width:100%;height:100%;min-height:310px;border:0;display:block;background:#000}
 .c7-local-frame-wrap #c7ScreenEmpty{position:absolute;inset:0;z-index:2;width:100%;height:100%;min-height:0;aspect-ratio:auto;margin:0;border:0;border-radius:0;pointer-events:none}
 @media(max-width:620px){.owner-access input{min-width:0;max-width:none;flex:1}.owner-access .owner-state{flex-basis:100%}}
+/* The old remote Apex-style simulator is not Cork7. Keep it out of the Solo bot UI. */
+.grid,.cloud-note{display:none!important}
 </style>
 </head>
 <body>
 <div class="shell">
   <header class="topbar">
-    <div class="brand"><div class="mark">C7</div><div><div class="brand-name">APEX LAB</div><div class="brand-sub">CLOUD AI CONTROL CENTRE</div></div></div>
+    <div class="brand"><div class="mark">C7</div><div><div class="brand-name">CORK7 BOT</div><div class="brand-sub">BROWSER SOLO TRAINER</div></div></div>
     <div class="top-right">
       <a class="pill" href="/coach/" style="text-decoration:none;color:#c5d8d6">REPLAY COACH ↗</a>
-      <div class="pill" id="connectionPill"><span class="dot"></span><span id="connectionText">CONNECTING TO NORTHFLANK</span></div>
-      <div class="pill"> <span style="color:var(--cyan)">●</span> CLOUD WORKER / APEX</div>
+      <div class="pill online" id="connectionPill"><span class="dot"></span><span id="connectionText">LOCAL BROWSER / READY</span></div>
+      <div class="pill"> <span style="color:var(--cyan)">●</span> SOLO PRACTICE / APEX</div>
     </div>
   </header>
 
@@ -52,8 +54,8 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
   </section>
 
   <div class="heading">
-    <div><div class="eyebrow">REMOTE TRAINING / NEUROEVOLUTION</div><h1>Teach it to ride.</h1><div class="subhead">Run the actual Cork7 game and AI training in this browser using your computer's CPU and graphics hardware. Northflank stores the learning checkpoints; it no longer needs to launch Chromium.</div></div>
-    <div class="course">✳ APEX / FREESTYLE LINE</div>
+    <div><div class="eyebrow">REAL GAME CONTROL / SCORE-BASED LEARNING</div><h1>Teach it to ride.</h1><div class="subhead">The bot practises in the real Cork7 Solo game inside this browser. Only scores detected on genuine results screens count toward learning. Progress stays saved in this browser, with optional checkpoint sync.</div></div>
+    <div class="course">✳ APEX / SOLO PRACTICE</div>
   </div>
 
   <section class="panel realgame">
@@ -70,7 +72,7 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
         <img id="c7Screen" class="realgame-screen" alt="Legacy remote screenshot" hidden style="display:none">
       </div>
       <div class="realgame-tools">
-        <div class="realgame-status" id="c7SessionStatus">The actual Cork7 player will run inside this page on your computer. Northflank will only coordinate and save learning checkpoints.</div>
+        <div class="realgame-status" id="c7SessionStatus">The actual Cork7 game and AI trainer run inside this browser. Learning checkpoints are saved locally; optional cloud sync never runs the game.</div>
         <div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">
           <select id="c7Park" class="realgame-select" aria-label="Cork7 park"><option>APEX</option></select>
           <button class="btn primary" id="c7Start" data-owner-only disabled>Open Cork7 here</button>
@@ -114,7 +116,7 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
           <button class="btn primary" id="c7TrainStart" data-owner-only disabled>Start AI trainer</button>
           <button class="btn" id="c7TrainPause" data-owner-only disabled>Stop training</button>
         </div>
-        <div class="realgame-status" id="c7TrainerStats">No Cork7 training runs yet. The browser runner tests timed trick-key policies against actual Cork7 results-screen scores and saves its best policy to Northflank.</div>
+        <div class="realgame-status" id="c7TrainerStats">No verified training runs yet. The browser trainer tests trick policies against real Cork7 results-screen scores, keeps the best policy and evolves the next attempt.</div>
         <div class="panel-meta">DIAGNOSTICS / FOCUS · INPUT · MENU · FRAME</div>
         <div class="realgame-status" id="c7DiagStatus" aria-live="polite">Diagnostics starting…</div>
         <div class="realgame-controls" style="gap:6px">
@@ -146,7 +148,7 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
           <button class="btn" id="resumeBtn" disabled>↻ Resume</button>
           <button class="btn danger" id="resetBtn" disabled>Reset learning</button>
         </div>
-        <div class="hint" id="saveStatus">Connect your Northflank worker to enable controls.</div>
+        <div class="hint" id="saveStatus">Cork7 practice runs and learning checkpoints are handled in this browser.</div>
       </div>
     </section>
 
@@ -185,7 +187,7 @@ button,a{font:inherit}.shell{max-width:1450px;margin:auto;padding:24px 28px 38px
   </main>
 
   <div class="cloud-note" id="cloudNote"><b>Cloud mode:</b> once the Northflank service is configured and connected, pressing Start runs training on the server. You can close your laptop; the worker continues while the service is running. Reopen this page to see its latest statistics and best-run data.</div>
-  <div class="footer"><span>APEX LAB / NORTHFLANK WORKER + VERCEL DASHBOARD</span><span>NEURAL POLICY · ELITE SELECTION · CROSSOVER · ADAPTIVE MUTATION · NOVELTY REWARD</span></div>
+  <div class="footer"><span>CORK7 BOT / SOLO BROWSER TRAINER</span><span>REAL RESULTS · VERIFIED SCORES · POLICY EVOLUTION</span></div>
 </div>
 
 <script>
@@ -1895,7 +1897,7 @@ $("resumeBtn").addEventListener("click",()=>command("resume"));
 $("resetBtn").addEventListener("click",()=>{if(confirm("Reset the cloud AI's learned weights, discoveries and best run? This cannot be undone."))command("reset");});
 $("replayBtn").addEventListener("click",loadReplay);
 window.addEventListener("resize",fitCanvas);
-fitCanvas();poll();setInterval(poll,2500);
+fitCanvas();
 $("ownerLogin").addEventListener("click",loginOwner);
 $("ownerLogout").addEventListener("click",logoutOwner);
 $("ownerPasscode").addEventListener("keydown",event=>{if(event.key==="Enter")loginOwner();});

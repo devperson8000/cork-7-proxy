@@ -844,6 +844,8 @@ async function observeCork7(){
     if(remote.trainer){
       const shouldSync=mergeRemoteTrainer(remote.trainer);
       updateLocalTrainerDisplay();
+      updateCompletionTestDisplay();
+      refreshOwnerControls();
       if(ownerAuthorized&&shouldSync){
         trainerSyncFingerprint="";
         await syncLocalTrainer();

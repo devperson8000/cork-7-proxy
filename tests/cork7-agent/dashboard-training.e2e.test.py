@@ -108,7 +108,7 @@ with sync_playwright() as p:
   page.locator('#c7TrainStart').click(timeout=5000)
   page.wait_for_function("""before => {
     const game=document.getElementById('c7LocalPlayer').contentDocument.querySelector('.game-frame iframe').contentWindow;
-    return game.__C7_KEYS__.length > before;
+    return game.__C7_KEYS__.length >= before + 4;
   }""",arg=key_count_before_run,timeout=5000)
   run_keys=page.evaluate("""before => {
     const game=document.getElementById('c7LocalPlayer').contentDocument.querySelector('.game-frame iframe').contentWindow;

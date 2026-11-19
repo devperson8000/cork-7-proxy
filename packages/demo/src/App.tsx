@@ -3,9 +3,11 @@ import BrowserView from "./pages/BrowserView";
 
 function getSiteMode() {
 	const runtimeConfig = (window as typeof window & {
-		CORK7_CONFIG?: { targetUrl?: unknown };
+		CORK7_CONFIG?: { site?: unknown; targetUrl?: unknown };
 	}).CORK7_CONFIG;
 	try {
+		if (runtimeConfig?.site === "saltyseas") return "pirate";
+		if (runtimeConfig?.site === "cork7") return "alpine";
 		if (typeof runtimeConfig?.targetUrl === "string") {
 			return new URL(runtimeConfig.targetUrl).hostname.toLowerCase() === "saltyseas.io"
 				? "pirate"

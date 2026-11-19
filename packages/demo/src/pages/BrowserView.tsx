@@ -11,7 +11,7 @@ const DEFAULT_ALLOWED_GAME_HOSTS = new Set([
 
 function getSitePresentation() {
 	const runtimeConfig = (window as typeof window & {
-		CORK7_CONFIG?: { targetUrl?: unknown };
+		CORK7_CONFIG?: { site?: unknown; targetUrl?: unknown };
 	}).CORK7_CONFIG;
 	try {
 		if (runtimeConfig?.site === "saltyseas") {

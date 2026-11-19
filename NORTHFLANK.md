@@ -21,10 +21,25 @@ The first build can take longer because it compiles the Rust WebAssembly rewrite
 | `CORK7_ALLOWED_HOSTS` | `cork7.com,www.cork7.com,live.cork7.com,agfhgulgtsocvioqqxvi.supabase.co,saltyseas.io` |
 | `ALLOWED_ORIGINS` | `https://cork7game.vercel.app` |
 | `MAX_WS_CONNECTIONS` | `60` |
+| `NETWORK_DIAGNOSTICS_TOKEN` | A long, private random token used to access the network diagnostics dashboard. Set this before using diagnostics. |
 
 The Cork7 game hosts and the Saltyseas hostname are exact entries. The observed account/API host `agfhgulgtsocvioqqxvi.supabase.co` is also included as one exact hostname so Cork7 can reach its account service. No wildcard hosts are enabled.
 
-## 3. Networking
+## 3. Network diagnostics
+
+Set `NETWORK_DIAGNOSTICS_TOKEN` in the Northflank service environment to a long, private random value. Keep it private; it grants access to recent network request hostnames and connection outcomes.
+
+After redeploying the service, open:
+
+```text
+https://YOUR-NORTHFLANK-HOST/diagnostics
+```
+
+Enter the token to view a live-updating log of Wisp stream requests, successful connections, blocked connections, failures, close reasons, ports, timestamps and connection duration. The dashboard retains the latest 500 events in memory; logs reset when the service restarts. The API is protected with a bearer token, and the diagnostics page itself does not expose the event data without that token. The log can be cleared from the dashboard.
+
+The diagnostics page is served directly by Northflank; it is not part of the Vercel game routes.
+
+## 4. Networking
 
 Expose:
 
@@ -37,13 +52,13 @@ Health check: HTTP GET `/health` on port `3000`.
 
 Northflank's HTTPS ingress provides TLS. The browser's Wisp connection uses `wss://`.
 
-## 4. Confirm the service
+## 5. Confirm the service
 
 - `https://YOUR-NORTHFLANK-HOST/health` should return JSON with `"status":"ok"`.
 - `https://YOUR-NORTHFLANK-HOST/c7/` should return the Scramjet player HTML.
 - The `/health` endpoint reports whether the server and built player assets are ready. It does not test an actual game session.
 
-## 5. Vercel path routing
+## 6. Vercel path routing
 
 The Vercel project serving `cork7game.vercel.app` has a route for `/c7/:path*` to serve the player assets and a dedicated `/ss` rewrite to load the same player with the Saltyseas selection. Point the player asset route to:
 
@@ -55,7 +70,7 @@ This is an external rewrite: the browser keeps `cork7game.vercel.app/c7/` in its
 
 The existing Vercel `VITE_WISP_URL` environment variable remains available, but this deployment builds the player in the Northflank Docker image. The baked-in default Wisp URL is the Northflank public hostname configured in `packages/demo/src/store.ts`. Change that default if the Northflank hostname changes.
 
-## 6. How the player works
+## 7. How the player works
 
 - The player loads `https://cork7.com/` by default.
 - Vercel's `/ss` route passes the fixed `site=saltyseas` selector, which changes the initial target to `https://saltyseas.io/app/`.
@@ -68,7 +83,7 @@ The existing Vercel `VITE_WISP_URL` environment variable remains available, but 
 
 A successful health check confirms the HTTP server is running. A successful WSS status confirms the browser can complete the WebSocket handshake. Neither alone guarantees every Cork7 asset or multiplayer feature is working; if game assets are blocked, verify the exact additional Cork7 hostname before adding it.
 
-## Troubleshooting
+## 8. Troubleshooting
 
 - **Build fails at `wasm-snip`:** check the Northflank build log; the Dockerfile installs the fork required by the repository's rewriter script.
 - **Health works but `/c7/` returns 404:** check that the Docker build completed the Vite player build and copied `packages/demo/dist`.

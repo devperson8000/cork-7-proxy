@@ -9,14 +9,13 @@ import { Omnibox, browserState } from "./pages/BrowserView";
 import { requestsState } from "./pages/RequestViewer";
 import { demoSettingsStore } from "./store";
 
-const QUICK_SITES = {
-	cork7: "https://cork7.com/",
-	saltyseas: "https://saltyseas.io/app/",
-} as const;
+const CORK7_URL = "https://cork7game.vercel.app/c7";
 
-function matchesSite(currentUrl: string, siteUrl: string) {
+function isCork7(currentUrl: string) {
 	try {
-		return new URL(currentUrl).hostname === new URL(siteUrl).hostname;
+		const current = new URL(currentUrl);
+		const target = new URL(CORK7_URL);
+		return current.hostname === target.hostname && current.pathname.startsWith("/c7");
 	} catch {
 		return false;
 	}
@@ -57,20 +56,11 @@ const App: Component<
 						<button
 							type="button"
 							class={use(browserState.url).map(
-								(url) => `tab-button site-button ${matchesSite(url, QUICK_SITES.cork7) ? "active" : ""}`
+								(url) => `tab-button site-button ${isCork7(url) ? "active" : ""}`
 							)}
-							on:click={() => openSite(QUICK_SITES.cork7)}
+							on:click={() => openSite(CORK7_URL)}
 						>
 							Cork7
-						</button>
-						<button
-							type="button"
-							class={use(browserState.url).map(
-								(url) => `tab-button site-button ${matchesSite(url, QUICK_SITES.saltyseas) ? "active" : ""}`
-							)}
-							on:click={() => openSite(QUICK_SITES.saltyseas)}
-						>
-							SaltySeas
 						</button>
 					</div>
 					<button

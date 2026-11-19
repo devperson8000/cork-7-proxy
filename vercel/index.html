@@ -2,34 +2,403 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" type="image/jpeg" href="/images.jpeg" />
-    <meta name="theme-color" content="#080b10" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#071522" />
     <meta name="color-scheme" content="dark" />
-    <meta name="referrer" content="no-referrer" />
-    <title>Cork7 Game</title>
+    <title>Choose Your World | Cork7 &amp; SaltySeas</title>
     <style>
-      :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #080b10; color: #edf3f7; }
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #071522;
+        color: #f7fbff;
+      }
       * { box-sizing: border-box; }
-      body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 28px; background: radial-gradient(ellipse at 50% 38%, rgba(51, 105, 107, .19), transparent 42%), #080b10; }
-      main { width: min(100%, 440px); text-align: center; }
-      .mark { display: grid; width: 58px; height: 58px; margin: 0 auto 24px; place-items: center; border: 1px solid rgba(151, 215, 203, .42); border-radius: 17px; background: rgba(91, 151, 143, .1); color: #b6e7dc; font-size: 20px; font-weight: 850; letter-spacing: -.08em; }
-      h1 { margin: 0; font-size: clamp(30px, 8vw, 42px); letter-spacing: -.055em; }
-      p { margin: 12px 0 28px; color: #91a1ad; font-size: 14px; line-height: 1.65; }
-      a { display: inline-flex; min-height: 46px; align-items: center; justify-content: center; padding: 0 20px; border: 1px solid rgba(157, 220, 208, .4); border-radius: 11px; background: #b6e7dc; color: #071010; font-size: 13px; font-weight: 800; text-decoration: none; transition: transform .16s ease, background .16s ease; }
-      a:hover { transform: translateY(-1px); background: #d0f5ec; }
-      a:focus-visible { outline: 2px solid #b6e7dc; outline-offset: 4px; }
-      .hint { display: block; margin-top: 18px; color: #687987; font-size: 11px; }
-      @media (prefers-reduced-motion: reduce) { a { transition: none; } }
+      html, body {
+        width: 100%;
+        height: 100%;
+        min-width: 320px;
+        margin: 0;
+        overflow: hidden;
+      }
+      body { min-height: 100vh; min-height: 100dvh; }
+      .launcher {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        width: 100%;
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+      }
+      .choice {
+        position: relative;
+        display: block;
+        width: 100%;
+        height: 100%;
+        min-width: 0;
+        overflow: hidden;
+        isolation: isolate;
+        color: inherit;
+        text-decoration: none;
+        -webkit-tap-highlight-color: transparent;
+        transition: filter 220ms ease;
+      }
+      .choice:focus-visible {
+        z-index: 5;
+        outline: 4px solid #fff;
+        outline-offset: -9px;
+      }
+      .choice:hover { filter: brightness(1.08) saturate(1.12); }
+      .choice-ski {
+        border-right: 1px solid rgba(255,255,255,.34);
+        background:
+          radial-gradient(ellipse at 62% 25%, rgba(192,236,255,.45), transparent 34%),
+          linear-gradient(155deg, #102b49 0%, #1d5878 48%, #9bc9d8 100%);
+      }
+      .choice-ski::before,
+      .choice-ski::after,
+      .choice-sea::before,
+      .choice-sea::after {
+        content: "";
+        position: absolute;
+        pointer-events: none;
+      }
+      .choice-ski::before {
+        z-index: 0;
+        left: -8%;
+        right: -8%;
+        bottom: -2%;
+        height: 61%;
+        background: linear-gradient(145deg, #e8f8fc 0%, #b3dce9 48%, #729eaf 100%);
+        clip-path: polygon(0 66%, 13% 38%, 22% 52%, 38% 7%, 49% 43%, 60% 17%, 77% 62%, 89% 34%, 100% 57%, 100% 100%, 0 100%);
+      }
+      .choice-ski::after {
+        z-index: 1;
+        left: -10%;
+        right: -10%;
+        bottom: -8%;
+        height: 43%;
+        background: linear-gradient(160deg, #f8fdff 0%, #d6edf4 55%, #9ac5d2 100%);
+        clip-path: polygon(0 35%, 15% 22%, 28% 42%, 45% 14%, 61% 40%, 76% 20%, 100% 38%, 100% 100%, 0 100%);
+      }
+      .ski-sun {
+        position: absolute;
+        z-index: 0;
+        top: 17%;
+        right: 18%;
+        width: clamp(100px, 13vw, 190px);
+        aspect-ratio: 1;
+        border-radius: 50%;
+        background: radial-gradient(circle, #fff 0%, #e4f8ff 36%, rgba(190,237,255,.12) 72%, transparent 73%);
+        filter: drop-shadow(0 0 34px rgba(218,247,255,.35));
+      }
+      .ski-peak {
+        position: absolute;
+        z-index: 1;
+        right: -7%;
+        bottom: 12%;
+        width: 83%;
+        height: 57%;
+        background: linear-gradient(145deg, #eaf8fc, #7faebf 74%);
+        clip-path: polygon(0 100%, 35% 17%, 47% 42%, 64% 0, 100% 100%);
+        opacity: .68;
+      }
+      .ski-peak-front {
+        right: 4%;
+        bottom: 13%;
+        width: 66%;
+        height: 44%;
+        background: linear-gradient(155deg, #fff 0%, #d6edf4 52%, #8bb8c7 100%);
+        clip-path: polygon(0 100%, 28% 31%, 43% 50%, 66% 0, 100% 100%);
+        opacity: .95;
+      }
+      .ski-slope {
+        position: absolute;
+        z-index: 2;
+        right: -15%;
+        bottom: -9%;
+        width: 76%;
+        height: 45%;
+        border-radius: 50% 0 0 0;
+        transform: rotate(-12deg);
+        background: linear-gradient(165deg, rgba(255,255,255,.98), rgba(205,236,245,.66));
+        box-shadow: inset 0 18px 30px rgba(255,255,255,.35);
+      }
+      .ski-trees {
+        position: absolute;
+        z-index: 2;
+        right: 7%;
+        bottom: 16%;
+        color: rgba(16,54,75,.34);
+        font-size: clamp(2rem, 5vw, 5rem);
+        letter-spacing: -.3em;
+        transform: rotate(-7deg);
+        white-space: nowrap;
+      }
+      .choice-sea {
+        background:
+          radial-gradient(ellipse at 55% 28%, rgba(36,139,153,.34), transparent 35%),
+          linear-gradient(155deg, #071827 0%, #0c3447 48%, #0b6170 100%);
+      }
+      .choice-sea::before {
+        z-index: 0;
+        left: -8%;
+        right: -8%;
+        bottom: -4%;
+        height: 50%;
+        background: linear-gradient(170deg, #0b5266, #082d45 80%);
+        clip-path: polygon(0 26%, 12% 18%, 24% 30%, 39% 14%, 54% 31%, 69% 13%, 82% 28%, 100% 15%, 100% 100%, 0 100%);
+      }
+      .choice-sea::after {
+        z-index: 1;
+        left: -8%;
+        right: -8%;
+        bottom: -10%;
+        height: 36%;
+        background: linear-gradient(160deg, rgba(26,145,157,.8), rgba(3,30,49,.98));
+        clip-path: polygon(0 30%, 15% 15%, 29% 33%, 45% 17%, 60% 32%, 75% 16%, 100% 35%, 100% 100%, 0 100%);
+      }
+      .sea-moon {
+        position: absolute;
+        z-index: 0;
+        top: 17%;
+        right: 19%;
+        width: clamp(95px, 12vw, 170px);
+        aspect-ratio: 1;
+        border-radius: 50%;
+        background: radial-gradient(circle at 38% 35%, #fff4cf, #e5d4a6 52%, rgba(229,212,166,.05) 72%, transparent 73%);
+        box-shadow: 0 0 75px rgba(238,212,148,.22);
+      }
+      .sea-stars {
+        position: absolute;
+        z-index: 1;
+        top: 31%;
+        right: 5%;
+        color: rgba(247,225,178,.72);
+        font-size: clamp(1rem, 2.6vw, 2.5rem);
+        letter-spacing: .65em;
+        white-space: nowrap;
+      }
+      .sea-ship {
+        position: absolute;
+        z-index: 2;
+        right: 13%;
+        bottom: 29%;
+        font-size: clamp(7rem, 17vw, 15rem);
+        line-height: 1;
+        color: #f0d9a5;
+        filter: drop-shadow(0 15px 26px rgba(0,0,0,.28));
+        transform: scaleX(1.12);
+      }
+      .sea-skull {
+        position: absolute;
+        z-index: 3;
+        top: 42%;
+        right: 29%;
+        color: #173542;
+        font-size: clamp(1.3rem, 2.7vw, 2.5rem);
+        text-shadow: 0 1px 0 rgba(255,255,255,.25);
+      }
+      .topline {
+        position: absolute;
+        z-index: 4;
+        top: clamp(22px, 4.5vh, 48px);
+        left: clamp(22px, 4vw, 58px);
+        right: clamp(22px, 4vw, 58px);
+        display: flex;
+        align-items: center;
+        gap: 13px;
+      }
+      .mark {
+        display: inline-grid;
+        flex: 0 0 42px;
+        width: 42px;
+        height: 42px;
+        place-items: center;
+        border: 1px solid rgba(255,255,255,.52);
+        border-radius: 50%;
+        background: rgba(255,255,255,.08);
+        color: #effaff;
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: -.04em;
+        backdrop-filter: blur(8px);
+      }
+      .sea-mark {
+        border-color: rgba(244,223,173,.55);
+        background: rgba(244,223,173,.08);
+        color: #f4dfad;
+      }
+      .edition {
+        color: rgba(244,250,255,.76);
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: .22em;
+      }
+      .hero {
+        position: absolute;
+        z-index: 4;
+        top: 49%;
+        left: clamp(24px, 6vw, 88px);
+        right: clamp(24px, 5vw, 72px);
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        transform: translateY(-50%);
+      }
+      .eyebrow {
+        margin-bottom: 13px;
+        color: #d9f2fc;
+        font-size: clamp(9px, 1vw, 13px);
+        font-weight: 900;
+        letter-spacing: .28em;
+      }
+      .sea-eyebrow { color: #f0d8a5; }
+      h1 {
+        margin: 0;
+        color: #fff;
+        font-family: "Barlow Condensed", Impact, "Arial Narrow", sans-serif;
+        font-size: clamp(76px, 10.5vw, 164px);
+        font-weight: 900;
+        line-height: .82;
+        letter-spacing: -.055em;
+        text-shadow: 0 7px 35px rgba(0,20,35,.2);
+        white-space: nowrap;
+      }
+      .ski-title span { color: #bfefff; }
+      .sea-title {
+        font-size: clamp(58px, 8.1vw, 130px);
+        letter-spacing: -.05em;
+      }
+      .sea-title span { color: #e8cf98; }
+      .description {
+        max-width: 390px;
+        margin: 22px 0 0;
+        color: rgba(247,252,255,.84);
+        font-size: clamp(12px, 1.25vw, 17px);
+        font-weight: 500;
+        line-height: 1.65;
+      }
+      .cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 30px;
+        margin-top: 32px;
+        padding: 15px 18px 15px 22px;
+        border: 1px solid rgba(255,255,255,.45);
+        border-radius: 3px;
+        background: rgba(240,250,255,.95);
+        box-shadow: 0 10px 30px rgba(0,20,35,.13);
+        color: #102b3f;
+        font-size: 12px;
+        font-weight: 950;
+        letter-spacing: .16em;
+        transition: transform 200ms ease, background 200ms ease;
+      }
+      .sea-cta {
+        border-color: rgba(245,224,181,.75);
+        background: rgba(245,224,181,.96);
+        color: #173443;
+      }
+      .arrow {
+        font-size: 19px;
+        line-height: 1;
+        transition: transform 200ms ease;
+      }
+      .choice:hover .cta { transform: translateY(-3px); background: #fff; }
+      .choice:hover .sea-cta { background: #fff1cf; }
+      .choice:hover .arrow { transform: translate(3px, -3px); }
+      .footer {
+        position: absolute;
+        z-index: 4;
+        left: clamp(22px, 4vw, 58px);
+        right: clamp(22px, 4vw, 58px);
+        bottom: clamp(20px, 3.8vh, 42px);
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        color: rgba(245,251,255,.72);
+        font-size: 10px;
+        font-weight: 850;
+        letter-spacing: .16em;
+      }
+      .divider {
+        position: absolute;
+        z-index: 5;
+        top: 0;
+        bottom: 0;
+        left: 50%;
+        width: 1px;
+        background: rgba(255,255,255,.28);
+        pointer-events: none;
+      }
+      @media (max-width: 700px) {
+        .topline { gap: 8px; }
+        .mark { flex-basis: 32px; width: 32px; height: 32px; font-size: 10px; }
+        .edition { font-size: 8px; letter-spacing: .12em; }
+        .hero { left: 18px; right: 14px; }
+        h1 { font-size: clamp(44px, 10.5vw, 78px); }
+        .sea-title { font-size: clamp(34px, 7.7vw, 62px); letter-spacing: -.06em; }
+        .description { margin-top: 16px; font-size: 11px; line-height: 1.45; }
+        .cta { gap: 12px; margin-top: 22px; padding: 12px 12px 12px 14px; font-size: 9px; letter-spacing: .1em; }
+        .footer { font-size: 7px; letter-spacing: .08em; }
+        .sea-ship { right: 1%; bottom: 33%; }
+        .sea-skull { right: 26%; }
+        .ski-sun, .sea-moon { right: 7%; top: 22%; }
+      }
+      @media (max-width: 390px) {
+        .edition { display: none; }
+        .footer { left: 14px; right: 14px; }
+        .hero { left: 14px; right: 10px; }
+        h1 { font-size: 42px; }
+        .sea-title { font-size: 33px; }
+        .description { font-size: 10px; }
+        .cta { font-size: 8px; padding: 10px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .choice, .cta, .arrow { transition: none; }
+      }
     </style>
   </head>
   <body>
-    <main>
-      <div class="mark" aria-hidden="true">C7</div>
-      <h1>Cork7</h1>
-      <p>Your game player is ready. Open the player to start a session.</p>
-      <a href="/c7">Launch game</a>
-      <span class="hint">Cork7 Game Player</span>
+    <main class="launcher" aria-label="Choose a game">
+      <a class="choice choice-ski" href="/c7" aria-label="Play Cork7 — launch the skiing game">
+        <span class="ski-sun" aria-hidden="true"></span>
+        <span class="ski-peak" aria-hidden="true"></span>
+        <span class="ski-peak ski-peak-front" aria-hidden="true"></span>
+        <span class="ski-slope" aria-hidden="true"></span>
+        <span class="ski-trees" aria-hidden="true">♠　♠　♠</span>
+        <span class="topline">
+          <span class="mark">C7</span>
+          <span class="edition">THE WINTER RUN</span>
+        </span>
+        <span class="hero">
+          <span class="eyebrow">FIND YOUR LINE</span>
+          <h1 class="ski-title">CORK<span>7</span></h1>
+          <span class="description">Drop into the mountain. Find your speed. Own the slopes.</span>
+          <span class="cta"><span>PLAY CORK7</span><span class="arrow" aria-hidden="true">↗</span></span>
+        </span>
+        <span class="footer"><span>01 / 02</span><span>SNOW · SPEED · SKILL</span></span>
+      </a>
+
+      <a class="choice choice-sea" href="/ss" aria-label="Play SaltySeas — launch the pirate game">
+        <span class="sea-moon" aria-hidden="true"></span>
+        <span class="sea-stars" aria-hidden="true">✦　·　✧　　 ·　✦</span>
+        <span class="sea-ship" aria-hidden="true">⛵</span>
+        <span class="sea-skull" aria-hidden="true">☠</span>
+        <span class="topline">
+          <span class="mark sea-mark">SS</span>
+          <span class="edition">THE OPEN WATERS</span>
+        </span>
+        <span class="hero">
+          <span class="eyebrow sea-eyebrow">CHART YOUR COURSE</span>
+          <h1 class="sea-title">SALTY<span>SEAS</span></h1>
+          <span class="description">Raise the sails. Chase the horizon. The sea is yours.</span>
+          <span class="cta sea-cta"><span>SET SAIL</span><span class="arrow" aria-hidden="true">↗</span></span>
+        </span>
+        <span class="footer"><span>02 / 02</span><span>SAIL · EXPLORE · DISCOVER</span></span>
+      </a>
+      <span class="divider" aria-hidden="true"></span>
     </main>
   </body>
 </html>

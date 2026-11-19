@@ -15,7 +15,7 @@ const APP_ROOT = path.resolve(SERVER_DIR, "..");
 const STATIC_ROOT = path.join(APP_ROOT, "packages", "demo", "dist");
 const PLAYER_INDEX = path.join(STATIC_ROOT, "index.html");
 
-const DEFAULT_ALLOWED_HOSTS = "cork7.com,www.cork7.com,live.cork7.com,agfhgulgtsocvioqqxvi.supabase.co,saltyseas.io,cdn.saltyseas.io,api-eu-1.saltyseas.io,accounts.google.com,www.googletagmanager.com";
+const DEFAULT_ALLOWED_HOSTS = "cork7.com,www.cork7.com,live.cork7.com,agfhgulgtsocvioqqxvi.supabase.co,saltyseas.io,cdn.saltyseas.io,api-eu-1.saltyseas.io,accounts.google.com,www.googletagmanager.com,region1.google-analytics.com";
 const DEFAULT_ALLOWED_ORIGINS = "https://cork7game.vercel.app";
 const SUPABASE_API_HOST = "agfhgulgtsocvioqqxvi.supabase.co";
 const SALTYSEAS_TARGET_URL = "https://saltyseas.io/app/";
@@ -24,6 +24,7 @@ const SALTYSEAS_CDN_HOST = "cdn.saltyseas.io";
 const SALTYSEAS_API_EU_HOST = "api-eu-1.saltyseas.io";
 const GOOGLE_ACCOUNTS_HOST = "accounts.google.com";
 const GOOGLE_TAG_MANAGER_HOST = "www.googletagmanager.com";
+const GOOGLE_ANALYTICS_REGION1_HOST = "region1.google-analytics.com";
 
 const MIME_TYPES = {
 	".html": "text/html; charset=utf-8",
@@ -524,6 +525,7 @@ const allowedHosts = [
 		SALTYSEAS_API_EU_HOST,
 		GOOGLE_ACCOUNTS_HOST,
 		GOOGLE_TAG_MANAGER_HOST,
+		GOOGLE_ANALYTICS_REGION1_HOST,
 	]),
 ];
 const allowedOrigins = parseAllowedOrigins(

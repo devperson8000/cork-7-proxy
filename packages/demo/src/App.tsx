@@ -5,8 +5,22 @@ import BrowserView from "./pages/BrowserView";
 import RequestViewer from "./pages/RequestViewer";
 import PlaygroundView from "./pages/Playground";
 import SettingsView from "./pages/SettingsPage";
-import { Omnibox } from "./pages/BrowserView";
+import { Omnibox, browserState } from "./pages/BrowserView";
 import { requestsState } from "./pages/RequestViewer";
+import { demoSettingsStore } from "./store";
+
+const QUICK_SITES = {
+	cork7: "https://cork7.com/",
+	saltyseas: "https://saltyseas.io/app/",
+} as const;
+
+function matchesSite(currentUrl: string, siteUrl: string) {
+	try {
+		return new URL(currentUrl).hostname === new URL(siteUrl).hostname;
+	} catch {
+		return false;
+	}
+}
 
 const App: Component<
 	{},
@@ -16,6 +30,14 @@ const App: Component<
 	}
 > = function (cx) {
 	this.activeTab ??= "browser";
+
+	const openSite = (url: string) => {
+		this.activeTab = "browser";
+		browserState.url = url;
+		demoSettingsStore.homeUrl = url;
+		browserState.frame?.go(url);
+	};
+
 	return (
 		<div>
 			<div class="top-bar">
@@ -30,6 +52,27 @@ const App: Component<
 					>
 						Browser
 					</button>
+					<div class="site-switcher" aria-label="Quick website switcher">
+						<span class="site-switcher-label">OPEN</span>
+						<button
+							type="button"
+							class={use(browserState.url).map(
+								(url) => `tab-button site-button ${matchesSite(url, QUICK_SITES.cork7) ? "active" : ""}`
+							)}
+							on:click={() => openSite(QUICK_SITES.cork7)}
+						>
+							Cork7
+						</button>
+						<button
+							type="button"
+							class={use(browserState.url).map(
+								(url) => `tab-button site-button ${matchesSite(url, QUICK_SITES.saltyseas) ? "active" : ""}`
+							)}
+							on:click={() => openSite(QUICK_SITES.saltyseas)}
+						>
+							SaltySeas
+						</button>
+					</div>
 					<button
 						class={use(this.activeTab).map(
 							(tab) => `tab-button ${tab === "requests" ? "active" : ""}`
@@ -158,6 +201,7 @@ App.style = css`
 		flex: 1;
 		align-items: stretch;
 		gap: 0;
+		min-width: 0;
 	}
 	.tab-button {
 		border: 1px solid transparent;
@@ -184,6 +228,40 @@ App.style = css`
 		color: #fff;
 		border-color: #4a4a4a;
 		margin-bottom: -1px;
+	}
+	.site-switcher {
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+		padding: 0 0.4em;
+		margin: 3px 0.35em;
+		border-left: 1px solid #303030;
+		border-right: 1px solid #303030;
+		flex: 0 0 auto;
+	}
+	.site-switcher-label {
+		padding: 0 0.25em;
+		color: #777;
+		font-size: 0.62em;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+	}
+	.tab-button.site-button {
+		min-height: 23px;
+		padding: 0.2em 0.55em;
+		border: 1px solid transparent;
+		border-radius: 3px;
+		font-size: 0.78em;
+	}
+	.tab-button.site-button.active {
+		margin: 0;
+		border-color: #40546a;
+		background: #192b3d;
+		color: #d6e8fa;
+	}
+	.tab-button.site-button:hover {
+		background: #202a34;
+		color: #fff;
 	}
 	.top-actions {
 		display: flex;

@@ -18,12 +18,12 @@ The first build can take longer because it compiles the Rust WebAssembly rewrite
 | Variable | Value |
 | --- | --- |
 | `PORT` | `3000` |
-| `CORK7_ALLOWED_HOSTS` | `cork7.com,www.cork7.com,live.cork7.com,agfhgulgtsocvioqqxvi.supabase.co,saltyseas.io` |
+| `CORK7_ALLOWED_HOSTS` | `cork7.com,www.cork7.com,live.cork7.com,agfhgulgtsocvioqqxvi.supabase.co,saltyseas.io,cdn.saltyseas.io` |
 | `ALLOWED_ORIGINS` | `https://cork7game.vercel.app` |
 | `MAX_WS_CONNECTIONS` | `60` |
 | `NETWORK_DIAGNOSTICS_TOKEN` | A long, private random token used to access the network diagnostics dashboard. Set this before using diagnostics. |
 
-The Cork7 game hosts and the Saltyseas hostname are exact entries. The observed account/API host `agfhgulgtsocvioqqxvi.supabase.co` is also included as one exact hostname so Cork7 can reach its account service. No wildcard hosts are enabled.
+The Cork7 game hosts and both Saltyseas hostnames (`saltyseas.io` and `cdn.saltyseas.io`) are exact entries. The observed account/API host `agfhgulgtsocvioqqxvi.supabase.co` is also included as one exact hostname so Cork7 can reach its account service. No wildcard hosts are enabled.
 
 ## 3. Network diagnostics
 

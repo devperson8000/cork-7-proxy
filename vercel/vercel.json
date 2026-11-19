@@ -1,18 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "redirects": [
+  "rewrites": [
     {
       "source": "/ss",
-      "destination": "https://saltyseas.io/app/",
-      "permanent": false
+      "destination": "https://p01--cork7--yf5q7tyyggsr.code.run/c7/?site=saltyseas"
     },
-    {
-      "source": "/ss/:path*",
-      "destination": "https://saltyseas.io/app/:path*",
-      "permanent": false
-    }
-  ],
-  "rewrites": [
     {
       "source": "/c7",
       "destination": "/c7.html"

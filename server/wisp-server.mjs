@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 
 const HOST = "0.0.0.0";
@@ -179,6 +179,176 @@ function setHealthCors(request, response, allowedOrigins) {
 		// Invalid or non-HTTPS browser origins receive no CORS permission.
 	}
 }
+
+
+const MAX_NETWORK_DIAGNOSTICS = 500;
+const networkDiagnostics = [];
+const streamDiagnostics = new Map();
+let networkDiagnosticSequence = 0;
+const NETWORK_DIAGNOSTICS_TOKEN = String(process.env.NETWORK_DIAGNOSTICS_TOKEN ?? "");
+
+const WISP_CLOSE_REASON_LABELS = {
+	1: "Unknown",
+	2: "Voluntary",
+	3: "NetworkError",
+	65: "InvalidInfo",
+	66: "UnreachableHost",
+	67: "NoResponse",
+	68: "ConnRefused",
+	71: "TransferTimeout",
+	72: "HostBlocked",
+	73: "ConnThrottled",
+};
+
+function pushNetworkDiagnostic(event) {
+	const entry = {
+		id: ++networkDiagnosticSequence,
+		timestamp: new Date().toISOString(),
+		...event,
+	};
+	networkDiagnostics.push(entry);
+	if (networkDiagnostics.length > MAX_NETWORK_DIAGNOSTICS) {
+		networkDiagnostics.splice(0, networkDiagnostics.length - MAX_NETWORK_DIAGNOSTICS);
+	}
+	console.info("[network-diagnostic] " + JSON.stringify(entry));
+	return entry;
+}
+
+function streamDiagnosticKey(connectionId, streamId) {
+	return String(connectionId) + ":" + String(streamId);
+}
+
+function reasonLabel(reason) {
+	return WISP_CLOSE_REASON_LABELS[Number(reason)] ?? "Unknown reason";
+}
+
+function isDiagnosticsAuthorized(request) {
+	if (!NETWORK_DIAGNOSTICS_TOKEN) return false;
+	const header = request.headers.authorization;
+	if (typeof header !== "string" || !header.startsWith("Bearer ")) return false;
+	const supplied = Buffer.from(header.slice(7));
+	const expected = Buffer.from(NETWORK_DIAGNOSTICS_TOKEN);
+	return supplied.length === expected.length && timingSafeEqual(supplied, expected);
+}
+
+function sendDiagnosticsUnauthorized(response) {
+	response.writeHead(NETWORK_DIAGNOSTICS_TOKEN ? 401 : 404, {
+		"Content-Type": "text/plain; charset=utf-8",
+		"Cache-Control": "no-store",
+		"WWW-Authenticate": "Bearer",
+	});
+	response.end(NETWORK_DIAGNOSTICS_TOKEN ? "Diagnostics authorization required" : "Diagnostics are disabled");
+}
+
+const NETWORK_DIAGNOSTICS_PAGE = String.raw`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cork7 Network Diagnostics</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,ui-sans-serif,system-ui,sans-serif;background:#0b1020;color:#e7ecf7}
+*{box-sizing:border-box}body{margin:0;padding:28px;max-width:1200px;margin-inline:auto}
+h1{font-size:24px;margin:0 0 8px}.sub{color:#9aa8c4;margin:0 0 24px}
+.panel{background:#121a2d;border:1px solid #27334c;border-radius:14px;padding:16px;margin:14px 0}
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+input{background:#0b1020;color:#e7ecf7;border:1px solid #35425f;border-radius:8px;padding:10px;min-width:260px}
+button{background:#315bd6;color:white;border:0;border-radius:8px;padding:10px 14px;cursor:pointer}
+button.secondary{background:#293550}button:disabled{opacity:.5;cursor:wait}
+#message{color:#aab7d0;margin-top:10px;font-size:13px}
+.stats{display:flex;gap:12px;flex-wrap:wrap}.stat{background:#0b1020;border:1px solid #27334c;border-radius:10px;padding:12px 16px;min-width:130px}
+.stat b{display:block;font-size:20px}.stat span{color:#9aa8c4;font-size:12px}
+.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}
+th,td{text-align:left;border-bottom:1px solid #27334c;padding:10px 12px}th{color:#9aa8c4;font-weight:600;position:sticky;top:0;background:#121a2d}
+.status{font-weight:700}.connected{color:#62d69a}.blocked{color:#ffbd63}.failed{color:#ff7777}.pending{color:#9ab7ff}.closed{color:#aab7d0}
+code{color:#d8e1ff}.empty{padding:28px;text-align:center;color:#9aa8c4}
+@media(max-width:600px){body{padding:16px}.panel{padding:12px}}
+</style>
+</head>
+<body>
+<h1>Cork7 Network Diagnostics</h1>
+<p class="sub">Live Wisp stream events for this service. The log is kept in memory and retains the latest 500 events.</p>
+<section class="panel">
+<div class="controls">
+<input id="token" type="password" autocomplete="off" placeholder="Diagnostics access token" aria-label="Diagnostics access token">
+<button id="connect">Connect</button>
+<button id="refresh" class="secondary" disabled>Refresh</button>
+<button id="clear" class="secondary" disabled>Clear log</button>
+</div>
+<div id="message">Enter the token configured in the service environment to view diagnostics.</div>
+</section>
+<section class="panel">
+<div class="stats">
+<div class="stat"><b id="total">—</b><span>Events shown</span></div>
+<div class="stat"><b id="connected">—</b><span>Connected</span></div>
+<div class="stat"><b id="blocked">—</b><span>Blocked</span></div>
+<div class="stat"><b id="failed">—</b><span>Failed</span></div>
+</div>
+</section>
+<section class="panel table-wrap">
+<table>
+<thead><tr><th>Time</th><th>Host</th><th>Port</th><th>Event</th><th>Status</th><th>Reason / details</th><th>Connection</th></tr></thead>
+<tbody id="events"><tr><td colspan="7" class="empty">Connect to load events.</td></tr></tbody>
+</table>
+</section>
+<script>
+(function(){
+ const tokenInput=document.getElementById("token");
+ const message=document.getElementById("message");
+ const tbody=document.getElementById("events");
+ let token="";
+ let timer=null;
+ function esc(value){
+  return String(value==null?"":value).replace(/[&<>"']/g,function(ch){
+   return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch];
+  });
+ }
+ function render(data){
+  const entries=data.events||[];
+  document.getElementById("total").textContent=entries.length;
+  document.getElementById("connected").textContent=entries.filter(e=>e.status==="connected").length;
+  document.getElementById("blocked").textContent=entries.filter(e=>e.status==="blocked").length;
+  document.getElementById("failed").textContent=entries.filter(e=>e.status==="failed").length;
+  if(!entries.length){tbody.innerHTML='<tr><td colspan="7" class="empty">No network events recorded yet.</td></tr>';return;}
+  tbody.innerHTML=entries.map(function(e){
+   const cls=["connected","blocked","failed","pending","closed"].includes(e.status)?e.status:"";
+   const date=new Date(e.timestamp);
+   return "<tr><td>"+esc(date.toLocaleTimeString())+"</td><td><code>"+esc(e.host)+"</code></td><td>"+esc(e.port)+"</td><td>"+esc(e.event)+"</td><td class='status "+cls+"'>"+esc(e.status)+"</td><td>"+esc(e.reason||e.detail||"—")+"</td><td>"+esc(e.connectionId)+"/"+esc(e.streamId)+"</td></tr>";
+  }).join("");
+ }
+ async function api(path,method){
+  const response=await fetch(path,{method:method||"GET",headers:{"Authorization":"Bearer "+token}});
+  if(response.status===401)throw new Error("Token was not accepted.");
+  if(!response.ok)throw new Error("Diagnostics request failed ("+response.status+").");
+  return response.json();
+ }
+ async function refresh(){
+  try{const data=await api("/diagnostics/network-api?limit=250");render(data);message.textContent="Connected · updated "+new Date().toLocaleTimeString();}
+  catch(error){message.textContent=error.message;if(timer){clearInterval(timer);timer=null;}}
+ }
+ document.getElementById("connect").addEventListener("click",async function(){
+  token=tokenInput.value.trim();
+  if(!token){message.textContent="Enter the diagnostics token first.";return;}
+  this.disabled=true;
+  try{
+   await refresh();
+   document.getElementById("refresh").disabled=false;
+   document.getElementById("clear").disabled=false;
+   if(!timer)timer=setInterval(refresh,2500);
+  }finally{this.disabled=false;}
+ });
+ document.getElementById("refresh").addEventListener("click",refresh);
+ document.getElementById("clear").addEventListener("click",async function(){
+  if(!token||!confirm("Clear the in-memory network log?"))return;
+  try{await api("/diagnostics/network-api/clear","POST");await refresh();}
+  catch(error){message.textContent=error.message;}
+ });
+ tokenInput.addEventListener("keydown",function(event){if(event.key==="Enter")document.getElementById("connect").click();});
+ window.addEventListener("beforeunload",function(){if(timer)clearInterval(timer);token="";});
+})();
+</script>
+</body>
+</html>`;
 
 function readHtmlAttribute(tag, name) {
 	const attributes = /([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g;
@@ -382,8 +552,96 @@ wisp.ServerConnection.prototype.create_stream = function (...args) {
 			},
 		});
 	}
+	const [streamId, streamType, hostname, port] = args;
+	const host = String(hostname ?? "").trim().toLowerCase();
+	const key = streamDiagnosticKey(this.conn_id, streamId);
+	const metadata = {
+		connectionId: this.conn_id,
+		streamId,
+		host,
+		port,
+		streamType: Number(streamType) === 1 ? "TCP" : "UDP",
+		startedAt: Date.now(),
+	};
+	streamDiagnostics.set(key, metadata);
+	pushNetworkDiagnostic({
+		event: "request",
+		status: "pending",
+		connectionId: metadata.connectionId,
+		streamId: metadata.streamId,
+		host: metadata.host,
+		port: metadata.port,
+		detail: metadata.streamType,
+	});
 	return originalCreateWispStream.apply(this, args);
 };
+
+if (wisp.ServerStream?.prototype?.setup) {
+	const originalSetupWispStream = wisp.ServerStream.prototype.setup;
+	wisp.ServerStream.prototype.setup = async function (ipString) {
+		const metadata = streamDiagnostics.get(
+			streamDiagnosticKey(this.conn.conn_id, this.stream_id),
+		);
+		const startedAt = Date.now();
+		try {
+			const result = await originalSetupWispStream.call(this, ipString);
+			pushNetworkDiagnostic({
+				event: "connect",
+				status: "connected",
+				connectionId: metadata?.connectionId ?? this.conn.conn_id,
+				streamId: this.stream_id,
+				host: this.socket.hostname,
+				port: this.socket.port,
+				durationMs: Date.now() - (metadata?.startedAt ?? startedAt),
+			});
+			return result;
+		} catch (error) {
+			pushNetworkDiagnostic({
+				event: "connect",
+				status: "failed",
+				connectionId: metadata?.connectionId ?? this.conn.conn_id,
+				streamId: this.stream_id,
+				host: this.socket.hostname,
+				port: this.socket.port,
+				durationMs: Date.now() - (metadata?.startedAt ?? startedAt),
+				reason: error instanceof Error ? error.message : String(error),
+			});
+			throw error;
+		}
+	};
+}
+
+const originalCloseWispStream = wisp.ServerConnection.prototype.close_stream;
+if (typeof originalCloseWispStream === "function") {
+	wisp.ServerConnection.prototype.close_stream = async function (
+		streamId,
+		reason = null,
+		sendPacket = true,
+	) {
+		const stream = this.streams?.[streamId];
+		const metadata = streamDiagnostics.get(streamDiagnosticKey(this.conn_id, streamId));
+		if (stream || metadata) {
+			const host = stream?.socket?.hostname ?? metadata?.host ?? "";
+			const port = stream?.socket?.port ?? metadata?.port ?? null;
+			const reasonText = reason == null ? "Connection ended" : reasonLabel(reason);
+			let status = "closed";
+			if (Number(reason) === 72) status = "blocked";
+			else if (reason != null && Number(reason) !== 2) status = "failed";
+			pushNetworkDiagnostic({
+				event: "close",
+				status,
+				connectionId: this.conn_id,
+				streamId,
+				host,
+				port,
+				reason: reasonText + (reason == null ? "" : " (" + Number(reason) + ")"),
+				durationMs: metadata ? Date.now() - metadata.startedAt : undefined,
+			});
+			streamDiagnostics.delete(streamDiagnosticKey(this.conn_id, streamId));
+		}
+		return originalCloseWispStream.call(this, streamId, reason, sendPacket);
+	};
+}
 
 // Keep Wisp restricted to the exact approved destination hosts and standard web ports.
 wisp.options.hostname_whitelist = allowedHosts.map(
@@ -411,6 +669,63 @@ const server = http.createServer(async (request, response) => {
 	} catch {
 		response.writeHead(400, { "Cache-Control": "no-store" });
 		response.end("Bad request");
+		return;
+	}
+
+
+	if (
+		request.method === "GET" &&
+		(pathname === "/diagnostics" || pathname === "/diagnostics/")
+	) {
+		response.writeHead(200, {
+			"Content-Type": "text/html; charset=utf-8",
+			"Cache-Control": "no-store",
+			"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'",
+			"X-Content-Type-Options": "nosniff",
+		});
+		response.end(NETWORK_DIAGNOSTICS_PAGE);
+		return;
+	}
+
+	if (
+		pathname === "/diagnostics/network-api" ||
+		pathname === "/diagnostics/network-api/clear"
+	) {
+		if (!isDiagnosticsAuthorized(request)) {
+			sendDiagnosticsUnauthorized(response);
+			return;
+		}
+		if (pathname.endsWith("/clear")) {
+			if (request.method !== "POST") {
+				response.writeHead(405, { "Allow": "POST", "Cache-Control": "no-store" });
+				response.end("Method not allowed");
+				return;
+			}
+			networkDiagnostics.length = 0;
+			response.writeHead(200, {
+				"Content-Type": "application/json; charset=utf-8",
+				"Cache-Control": "no-store",
+			});
+			response.end(JSON.stringify({ cleared: true }));
+			return;
+		}
+		if (request.method !== "GET") {
+			response.writeHead(405, { "Allow": "GET", "Cache-Control": "no-store" });
+			response.end("Method not allowed");
+			return;
+		}
+		const requestedLimit = Number(new URL(request.url ?? "/", "http://localhost").searchParams.get("limit") ?? 100);
+		const limit = Number.isFinite(requestedLimit)
+			? Math.min(MAX_NETWORK_DIAGNOSTICS, Math.max(1, Math.trunc(requestedLimit)))
+			: 100;
+		response.writeHead(200, {
+			"Content-Type": "application/json; charset=utf-8",
+			"Cache-Control": "no-store",
+		});
+		response.end(JSON.stringify({
+			count: networkDiagnostics.length,
+			events: networkDiagnostics.slice(-limit).reverse(),
+		}));
 		return;
 	}
 

@@ -227,7 +227,7 @@
     .world-card::before {
       position: absolute;
       inset: 0;
-      z-index: -1;
+      z-index: 1;
       content: "";
       pointer-events: none;
       opacity: .68;
@@ -237,7 +237,7 @@
     .world-card::after {
       position: absolute;
       inset: 0;
-      z-index: -1;
+      z-index: 2;
       border-radius: inherit;
       content: "";
       pointer-events: none;
@@ -278,7 +278,7 @@
     .artwork {
       position: absolute;
       inset: 0;
-      z-index: -1;
+      z-index: 0;
       overflow: hidden;
       pointer-events: none;
     }
@@ -461,7 +461,7 @@
     .card-content,
     .card-foot {
       position: relative;
-      z-index: 2;
+      z-index: 3;
       margin: clamp(18px, 2.3vw, 32px);
     }
     .card-head {

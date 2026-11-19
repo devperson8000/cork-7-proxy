@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/ss-player",
-      "destination": "https://p01--cork7--yf5q7tyyggsr.code.run/c7/?site=saltyseas"
+      "destination": "https://p01--cork7--yf5q7tyyggsr.code.run/saltyseas-player/"
     },
     {
       "source": "/ss",

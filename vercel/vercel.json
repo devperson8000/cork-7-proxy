@@ -3,7 +3,15 @@
   "rewrites": [
     {
       "source": "/c7",
+      "destination": "/c7.html"
+    },
+    {
+      "source": "/player",
       "destination": "https://p01--cork7--yf5q7tyyggsr.code.run/c7/"
+    },
+    {
+      "source": "/player/:path*",
+      "destination": "https://p01--cork7--yf5q7tyyggsr.code.run/c7/:path*"
     },
     {
       "source": "/c7/:path*",

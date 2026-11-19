@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#07151b">
+<meta name="referrer" content="no-referrer">
+<link rel="preconnect" href="https://p01--cork7--yf5q7tyyggsr.code.run" crossorigin>
+<link rel="dns-prefetch" href="//p01--cork7--yf5q7tyyggsr.code.run">
+<title>Saltyseas | Pirate Waters</title>
+<style>
+:root{color-scheme:dark;--bg:#07151b;--line:rgba(238,198,128,.17);--muted:#9aada9;--text:#f6f1e7;--gold:#f1c77b;--sea:#4bc0b6}
+*{box-sizing:border-box}
+html,body{width:100%;height:100%;margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{display:flex;flex-direction:column;overflow:hidden;background:radial-gradient(ellipse at 82% -18%,rgba(36,143,139,.24),transparent 43%),linear-gradient(150deg,#07151b,#0a2228 57%,#07171d)}
+.topbar{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:20px;min-height:76px;padding:11px clamp(16px,3vw,42px);border-bottom:1px solid var(--line);background:rgba(5,18,23,.88);backdrop-filter:blur(18px)}
+.brand{display:flex;align-items:center;gap:13px;min-width:0}.brand-mark{width:44px;height:44px;display:grid;place-items:center;flex:none;border:1px solid rgba(241,199,123,.43);border-radius:14px;background:linear-gradient(145deg,rgba(241,199,123,.19),rgba(16,57,62,.58));color:var(--gold);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 7px 24px rgba(0,0,0,.25)}
+.brand-copy{min-width:0}.eyebrow{margin:0 0 3px;color:#9dc9bd;font-size:8px;font-weight:850;letter-spacing:.24em}
+.brand-title{font-size:14px;font-weight:950;letter-spacing:.18em;line-height:1}.brand-sub{margin-top:5px;color:#a5b8ae;font-size:9px;font-weight:650;letter-spacing:.12em}
+.header-right{display:flex;align-items:center;justify-content:flex-end;gap:12px}
+.nav{display:flex;align-items:center;gap:5px;padding:4px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025)}
+.nav a,.open-link{display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:0 13px;border:1px solid transparent;border-radius:8px;color:#b5c2b9;text-decoration:none;font-size:11px;font-weight:800;white-space:nowrap;transition:background .18s ease,color .18s ease,border-color .18s ease}
+.nav a:hover,.open-link:hover{color:#fff8e9;border-color:rgba(241,199,123,.28)}
+.nav a[aria-current=page]{background:rgba(241,199,123,.13);border-color:rgba(241,199,123,.28);color:var(--gold)}
+.open-link{border-color:var(--line);background:rgba(255,255,255,.035);color:#e9ddc5}
+main{display:flex;flex:1;flex-direction:column;min-height:0;padding:clamp(12px,2vw,24px) clamp(12px,3vw,42px) clamp(12px,2vw,24px);gap:13px}
+.intro{position:relative;display:flex;align-items:center;justify-content:space-between;gap:20px;min-height:82px;padding:2px 5px;overflow:hidden}
+.intro:after{content:"";position:absolute;right:2%;bottom:-42px;width:38%;height:135px;border-top:1px solid rgba(75,192,182,.2);border-radius:50% 50% 0 0;background:linear-gradient(180deg,rgba(75,192,182,.12),rgba(14,75,78,.015));transform:rotate(-5deg);pointer-events:none}
+.intro:before{content:"";position:absolute;right:10%;top:-18px;width:90px;height:90px;border:1px solid rgba(241,199,123,.09);border-radius:50%;box-shadow:0 0 0 12px rgba(241,199,123,.025),0 0 0 25px rgba(241,199,123,.018);pointer-events:none}
+.intro-copy{position:relative;z-index:1}.kicker{display:flex;align-items:center;gap:8px;margin:0 0 7px;color:var(--gold);font-size:8px;font-weight:900;letter-spacing:.22em}
+.kicker:before{content:"";width:17px;height:1px;background:var(--gold)}
+h1{margin:0;color:#fff8ed;font-size:clamp(21px,3vw,33px);font-weight:900;letter-spacing:-.045em;line-height:1.05}
+.intro p:last-child{margin:7px 0 0;color:#a2b8b1;font-size:11px;letter-spacing:.015em}
+.compass{position:relative;z-index:1;display:flex;align-items:center;gap:10px;padding:10px 13px;border:1px solid var(--line);border-radius:12px;background:rgba(13,37,41,.7);color:#d7c9a8;font-size:9px;font-weight:850;letter-spacing:.14em;white-space:nowrap}
+.compass svg{width:22px;height:22px;stroke:var(--gold);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.game-card{position:relative;display:flex;flex:1;flex-direction:column;min-height:0;overflow:hidden;border:1px solid rgba(241,199,123,.2);border-radius:17px;background:#02090c;box-shadow:0 24px 80px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.04)}
+.game-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:38px;padding:0 14px;border-bottom:1px solid rgba(241,199,123,.13);background:linear-gradient(90deg,rgba(14,48,51,.98),rgba(8,29,35,.96));color:#b3c4b7;font-size:8px;font-weight:850;letter-spacing:.17em}
+.game-bar span{display:inline-flex;align-items:center;gap:7px}.signal{width:6px;height:6px;border-radius:50%;background:#77e0b6;box-shadow:0 0 12px rgba(119,224,182,.72)}
+.stage{position:relative;flex:1;min-height:0;background:#02090c}iframe{display:block;width:100%;height:100%;border:0;background:#02090c}
+.status{position:absolute;left:13px;bottom:13px;z-index:1;display:inline-flex;align-items:center;gap:8px;padding:8px 11px;border:1px solid rgba(241,199,123,.18);border-radius:9px;background:rgba(4,17,21,.8);backdrop-filter:blur(12px);color:#c0c6b7;font-size:9px;font-weight:800;letter-spacing:.1em;pointer-events:none}
+.status-mark{color:var(--gold)}
+@media(max-width:760px){.topbar{min-height:68px;align-items:flex-start;flex-direction:column;gap:10px}.header-right{width:100%;justify-content:space-between;flex-wrap:wrap}.nav{flex:1}.nav a{flex:1}.open-link{padding:0 9px}.intro{min-height:74px}.compass{display:none}}
+@media(max-width:480px){.brand-mark{width:39px;height:39px}.brand-title{font-size:12px}.brand-sub{font-size:8px}.nav a,.open-link{font-size:10px}.game-bar{font-size:7px;letter-spacing:.1em;padding:0 9px}.status{left:8px;bottom:8px;font-size:8px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 32 32" width="25" height="25" aria-hidden="true"><path d="M16 3v26M5 8h22M7 8l-4 9h8L7 8Zm18 0-4 9h8l-4-9Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="16" cy="17" r="4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m9 25 7 4 7-4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+    </div>
+    <div class="brand-copy"><p class="eyebrow">THE SEVEN SEAS AWAIT</p><div class="brand-title">SALTYSEAS</div><div class="brand-sub">CHART YOUR OWN COURSE</div></div>
+  </div>
+  <div class="header-right">
+    <nav class="nav" aria-label="Choose a game">
+      <a href="/c7">⛷ Cork7</a>
+      <a href="/ss" aria-current="page">☠ Saltyseas</a>
+    </nav>
+    <a class="open-link" href="/player/?site=saltyseas" target="_blank" rel="noopener noreferrer">Open player ↗</a>
+  </div>
+</header>
+<main>
+  <section class="intro">
+    <div class="intro-copy">
+      <p class="kicker">02 / OPEN-WATERS SESSION</p>
+      <h1>Sail beyond the map.</h1>
+      <p>Follow the tide, find your crew, and set out across the open seas.</p>
+    </div>
+    <div class="compass"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2.2 4.8-4.8 2.2 2.2-4.8 4.8-2.2Z"/><path d="M12 2v2m10 8h-2M12 22v-2M2 12h2"/></svg><span>PIRATE MODE · SALTYSEAS</span></div>
+  </section>
+  <section class="game-card" aria-label="Saltyseas pirate game">
+    <div class="game-bar"><span><i class="signal"></i> OPEN-WATERS SESSION</span><span>PROXY PLAYER · FULLSCREEN READY</span></div>
+    <div class="stage">
+      <iframe id="siteFrame" title="Saltyseas pirate waters" src="/player/?site=saltyseas" fetchpriority="high" allow="autoplay; fullscreen; gamepad; clipboard-read; clipboard-write" allowfullscreen referrerpolicy="no-referrer"></iframe>
+      <div class="status"><span class="status-mark">✦</span> CONNECTING TO PIRATE WATERS</div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

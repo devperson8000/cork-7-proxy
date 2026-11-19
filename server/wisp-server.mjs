@@ -9,6 +9,7 @@ import { server as wisp, logging } from "@mercuryworkshop/wisp-js/server";
 const HOST = "0.0.0.0";
 const WISP_PATH = "/wisp/";
 const PLAYER_PATH = "/c7";
+const SALTYSEAS_PLAYER_PATH = "/saltyseas-player";
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = path.resolve(SERVER_DIR, "..");
 const STATIC_ROOT = path.join(APP_ROOT, "packages", "demo", "dist");
@@ -128,6 +129,7 @@ function parseTargetUrl(value, allowedHosts) {
 
 function runtimeConfigScript(targetUrl, allowedHosts) {
 	const payload = JSON.stringify({
+		site: new URL(targetUrl).hostname.toLowerCase() === SALTYSEAS_HOST ? "saltyseas" : "cork7",
 		targetUrl,
 		allowedHosts,
 	})
@@ -432,24 +434,35 @@ const server = http.createServer(async (request, response) => {
 		return;
 	}
 
-	if (request.method === "GET" && pathname === PLAYER_PATH) {
+	if (request.method === "GET" && (pathname === PLAYER_PATH || pathname === SALTYSEAS_PLAYER_PATH)) {
+		const redirectPath = pathname === SALTYSEAS_PLAYER_PATH
+			? SALTYSEAS_PLAYER_PATH + "/"
+			: PLAYER_PATH + "/";
 		response.writeHead(308, {
-			Location: PLAYER_PATH + "/",
+			Location: redirectPath,
 			"Cache-Control": "no-store",
 		});
 		response.end();
 		return;
 	}
 
-	if (
-		request.method === "GET" &&
-		(pathname === PLAYER_PATH + "/" || pathname.startsWith(PLAYER_PATH + "/"))
-	) {
+	const isSaltyseasPlayerPath =
+		pathname === SALTYSEAS_PLAYER_PATH + "/" ||
+		pathname.startsWith(SALTYSEAS_PLAYER_PATH + "/");
+	const isCork7PlayerPath =
+		pathname === PLAYER_PATH + "/" ||
+		pathname.startsWith(PLAYER_PATH + "/");
+
+	if (request.method === "GET" && (isCork7PlayerPath || isSaltyseasPlayerPath)) {
 		const requestedSite = new URL(request.url ?? "/", "http://localhost").searchParams.get("site");
-		const pageTargetUrl = requestedSite === "saltyseas"
+		const useSaltyseas = isSaltyseasPlayerPath || requestedSite === "saltyseas";
+		const pageTargetUrl = useSaltyseas
 			? parseTargetUrl(SALTYSEAS_TARGET_URL, allowedHosts)
 			: targetUrl;
-		void servePlayerAsset(pathname, request, response, pageTargetUrl);
+		const assetPath = isSaltyseasPlayerPath
+			? PLAYER_PATH + pathname.slice(SALTYSEAS_PLAYER_PATH.length)
+			: pathname;
+		void servePlayerAsset(assetPath, request, response, pageTargetUrl);
 		return;
 	}
 

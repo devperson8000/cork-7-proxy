@@ -1,404 +1,921 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#071522" />
-    <meta name="color-scheme" content="dark" />
-    <title>Choose Your World | Cork7 &amp; SaltySeas</title>
-    <style>
-      :root {
-        color-scheme: dark;
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #071522;
-        color: #f7fbff;
-      }
-      * { box-sizing: border-box; }
-      html, body {
-        width: 100%;
-        height: 100%;
-        min-width: 320px;
-        margin: 0;
-        overflow: hidden;
-      }
-      body { min-height: 100vh; min-height: 100dvh; }
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#071521">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Choose your next adventure: race the mountain in Cork7 or set sail in SaltySeas.">
+  <title>Choose Your World | Cork7 + SaltySeas</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #071521;
+      color: #f5f8fb;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+      --ink: #f5f8fb;
+      --muted: #9caebb;
+      --line: rgba(209, 231, 242, .13);
+      --glass: rgba(10, 24, 36, .68);
+      --ice: #b6ecff;
+      --gold: #f2d5a0;
+    }
+
+    * { box-sizing: border-box; }
+    html { min-width: 320px; min-height: 100%; background: #071521; }
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      min-height: 100svh;
+      margin: 0;
+      overflow-x: hidden;
+      background:
+        radial-gradient(ellipse at 10% 0%, rgba(65, 125, 157, .16), transparent 34rem),
+        radial-gradient(ellipse at 94% 100%, rgba(21, 104, 111, .13), transparent 36rem),
+        #071521;
+    }
+    body::before {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      content: "";
+      pointer-events: none;
+      opacity: .17;
+      background-image: radial-gradient(rgba(220, 240, 248, .38) .55px, transparent .7px);
+      background-size: 5px 5px;
+      mask-image: linear-gradient(to bottom, black, transparent 85%);
+    }
+
+    .launcher {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-rows: auto auto minmax(440px, 1fr) auto;
+      gap: clamp(17px, 2.1vh, 26px);
+      width: min(100%, 1680px);
+      min-height: 100vh;
+      min-height: 100svh;
+      margin: 0 auto;
+      padding: clamp(20px, 3.2vw, 42px) clamp(18px, 4vw, 64px) clamp(18px, 2.5vw, 30px);
+    }
+
+    .masthead {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      min-width: 0;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+      color: var(--ink);
+      text-decoration: none;
+    }
+    .brand-mark {
+      display: grid;
+      flex: 0 0 42px;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      border: 1px solid rgba(183, 226, 243, .25);
+      border-radius: 14px;
+      background: linear-gradient(145deg, rgba(176, 226, 245, .14), rgba(255,255,255,.025));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.09), 0 10px 28px rgba(0,0,0,.2);
+      color: #d4f3ff;
+    }
+    .brand-mark svg { width: 25px; height: 25px; }
+    .brand-copy { display: grid; gap: 4px; }
+    .brand-overline {
+      color: #91aeba;
+      font-size: 8px;
+      font-weight: 900;
+      letter-spacing: .25em;
+      line-height: 1;
+    }
+    .brand-name {
+      font-size: 13px;
+      font-weight: 950;
+      letter-spacing: .19em;
+      line-height: 1;
+    }
+    .masthead-meta {
+      display: inline-flex;
+      align-items: center;
+      gap: 11px;
+      padding: 9px 13px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255,255,255,.035);
+      color: #adc0ca;
+      font-size: 9px;
+      font-weight: 850;
+      letter-spacing: .16em;
+      white-space: nowrap;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    .meta-orbit {
+      position: relative;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #9bd9c4;
+      box-shadow: 0 0 13px rgba(155, 217, 196, .65);
+    }
+    .meta-orbit::after {
+      position: absolute;
+      inset: -4px;
+      border: 1px solid rgba(155, 217, 196, .28);
+      border-radius: 50%;
+      content: "";
+    }
+
+    .intro {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 22px;
+      min-width: 0;
+    }
+    .intro-copy { min-width: 0; }
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin: 0 0 10px;
+      color: #a8d8e8;
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: .24em;
+    }
+    .eyebrow::before {
+      width: 24px;
+      height: 1px;
+      background: linear-gradient(90deg, #b7eaff, transparent);
+      content: "";
+    }
+    h1 {
+      margin: 0;
+      color: #f5f8fb;
+      font-size: clamp(29px, 4.1vw, 54px);
+      font-weight: 900;
+      letter-spacing: -.065em;
+      line-height: .98;
+    }
+    .intro-description {
+      margin: 10px 0 0;
+      color: #93a8b5;
+      font-size: clamp(11px, 1.05vw, 13px);
+      line-height: 1.55;
+    }
+    .step-indicator {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex: 0 0 auto;
+      padding: 12px 15px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: linear-gradient(145deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
+      color: #aec0ca;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
+    }
+    .step-numbers {
+      color: #e8f6fb;
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing: -.06em;
+    }
+    .step-label {
+      display: grid;
+      gap: 3px;
+      font-size: 8px;
+      font-weight: 850;
+      letter-spacing: .16em;
+      line-height: 1.25;
+    }
+    .step-label span:last-child { color: #728c9a; }
+
+    .world-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: clamp(13px, 1.7vw, 23px);
+      min-height: 0;
+    }
+    .world-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-width: 0;
+      min-height: 440px;
+      overflow: hidden;
+      isolation: isolate;
+      border: 1px solid rgba(211, 235, 247, .2);
+      border-radius: clamp(20px, 2vw, 30px);
+      color: #fff;
+      text-decoration: none;
+      box-shadow: 0 28px 75px rgba(0, 0, 0, .31), inset 0 1px 0 rgba(255,255,255,.12);
+      -webkit-tap-highlight-color: transparent;
+      transform: translateZ(0);
+      transition: transform 320ms cubic-bezier(.2,.8,.2,1), border-color 320ms ease, box-shadow 320ms ease, filter 320ms ease;
+    }
+    .world-card::before {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      content: "";
+      pointer-events: none;
+      opacity: .68;
+      background: linear-gradient(180deg, rgba(4,13,22,.12) 0%, transparent 34%, rgba(3,12,19,.18) 57%, rgba(3,10,17,.84) 100%);
+      transition: opacity 320ms ease;
+    }
+    .world-card::after {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      border-radius: inherit;
+      content: "";
+      pointer-events: none;
+      opacity: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,.18), transparent 35%, transparent 65%, rgba(255,255,255,.05));
+      transition: opacity 320ms ease;
+    }
+    .world-card:hover {
+      z-index: 2;
+      transform: translateY(-5px) scale(1.008);
+      box-shadow: 0 36px 88px rgba(0,0,0,.38), 0 0 0 1px rgba(255,255,255,.05), inset 0 1px 0 rgba(255,255,255,.18);
+    }
+    .world-card:hover::before { opacity: .48; }
+    .world-card:hover::after { opacity: 1; }
+    .world-card:focus-visible {
+      z-index: 3;
+      outline: 3px solid #f5fbff;
+      outline-offset: 5px;
+      border-color: rgba(255,255,255,.78);
+    }
+    .world-card:active { transform: translateY(-1px) scale(.997); }
+
+    .world-card--cork {
+      border-color: rgba(176, 227, 248, .3);
+      background:
+        radial-gradient(ellipse at 72% 20%, rgba(220, 247, 255, .52), transparent 25%),
+        radial-gradient(ellipse at 18% 68%, rgba(129, 194, 218, .2), transparent 30%),
+        linear-gradient(148deg, #143652 0%, #286480 44%, #8ab8c8 100%);
+    }
+    .world-card--sea {
+      border-color: rgba(240, 211, 157, .28);
+      background:
+        radial-gradient(ellipse at 76% 20%, rgba(229, 195, 135, .2), transparent 26%),
+        radial-gradient(ellipse at 28% 58%, rgba(37, 157, 157, .22), transparent 35%),
+        linear-gradient(148deg, #081a2a 0%, #0b394b 47%, #0d6870 100%);
+    }
+
+    .artwork {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .cork-sun {
+      position: absolute;
+      top: 16%;
+      right: 17%;
+      width: clamp(90px, 12vw, 160px);
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: radial-gradient(circle, #fff 0%, #e9faff 34%, rgba(200,240,252,.35) 63%, transparent 72%);
+      filter: drop-shadow(0 0 38px rgba(224,248,255,.34));
+      animation: sun-breathe 8s ease-in-out infinite;
+    }
+    .mountain {
+      position: absolute;
+      right: -8%;
+      bottom: -1%;
+      width: 116%;
+      transform-origin: bottom center;
+    }
+    .mountain--far {
+      height: 73%;
+      opacity: .72;
+      background: linear-gradient(155deg, #e5f7fc 0%, #b0d8e5 39%, #719faf 100%);
+      clip-path: polygon(0 82%, 12% 55%, 22% 65%, 38% 10%, 48% 40%, 60% 0, 76% 53%, 87% 29%, 100% 66%, 100% 100%, 0 100%);
+      filter: drop-shadow(0 -8px 22px rgba(231,248,253,.12));
+    }
+    .mountain--middle {
+      right: -16%;
+      height: 53%;
+      background: linear-gradient(165deg, #f8fdff 0%, #d6edf4 45%, #8bb9c8 100%);
+      clip-path: polygon(0 75%, 17% 25%, 29% 47%, 44% 0, 58% 43%, 73% 15%, 100% 70%, 100% 100%, 0 100%);
+      opacity: .94;
+    }
+    .mountain--front {
+      right: -21%;
+      bottom: -12%;
+      height: 38%;
+      background: linear-gradient(165deg, #fff 0%, #e5f4f8 48%, #aecfda 100%);
+      clip-path: polygon(0 36%, 18% 12%, 30% 32%, 47% 8%, 63% 29%, 80% 0, 100% 28%, 100% 100%, 0 100%);
+      opacity: .98;
+    }
+    .ski-track {
+      position: absolute;
+      right: -4%;
+      bottom: 4%;
+      width: 60%;
+      height: 30%;
+      border: 2px solid rgba(89, 148, 168, .19);
+      border-color: rgba(89,148,168,.18) transparent transparent rgba(89,148,168,.13);
+      border-radius: 50%;
+      transform: rotate(-19deg);
+      filter: blur(.4px);
+    }
+    .ski-track--two {
+      right: 8%;
+      bottom: 1%;
+      width: 43%;
+      height: 23%;
+      opacity: .7;
+      transform: rotate(-24deg);
+    }
+    .pine-line {
+      position: absolute;
+      right: 7%;
+      bottom: 18%;
+      color: rgba(22, 63, 79, .42);
+      font-size: clamp(28px, 4.8vw, 62px);
+      letter-spacing: -.32em;
+      white-space: nowrap;
+      text-shadow: 0 4px 12px rgba(255,255,255,.12);
+      transform: rotate(-5deg);
+    }
+    .snow-drift {
+      position: absolute;
+      right: -9%;
+      bottom: -16%;
+      width: 75%;
+      height: 42%;
+      border-radius: 50%;
+      background: linear-gradient(145deg, rgba(255,255,255,.96), rgba(214,239,246,.32));
+      box-shadow: inset 0 16px 38px rgba(255,255,255,.27), 0 -12px 60px rgba(234,249,255,.11);
+      transform: rotate(-10deg);
+    }
+
+    .sea-moon {
+      position: absolute;
+      top: 15%;
+      right: 18%;
+      width: clamp(82px, 11vw, 148px);
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: radial-gradient(circle at 36% 34%, #fff7df 0%, #e9d6a6 49%, rgba(222,196,145,.12) 72%, transparent 74%);
+      box-shadow: 0 0 65px rgba(236, 210, 156, .2), 0 0 150px rgba(236,210,156,.08);
+      animation: moon-drift 10s ease-in-out infinite;
+    }
+    .stars {
+      position: absolute;
+      inset: 0;
+      opacity: .75;
+      background-image:
+        radial-gradient(2px 2px at 14% 19%, rgba(255,238,200,.9) 50%, transparent 70%),
+        radial-gradient(1.5px 1.5px at 33% 13%, rgba(255,238,200,.7) 50%, transparent 70%),
+        radial-gradient(1px 1px at 58% 24%, rgba(255,238,200,.8) 50%, transparent 70%),
+        radial-gradient(2px 2px at 83% 12%, rgba(255,238,200,.86) 50%, transparent 70%),
+        radial-gradient(1px 1px at 91% 39%, rgba(255,238,200,.68) 50%, transparent 70%),
+        radial-gradient(1.5px 1.5px at 24% 42%, rgba(255,238,200,.72) 50%, transparent 70%),
+        radial-gradient(1px 1px at 71% 47%, rgba(255,238,200,.62) 50%, transparent 70%);
+    }
+    .sea-horizon {
+      position: absolute;
+      left: -10%;
+      right: -10%;
+      bottom: 21%;
+      height: 30%;
+      border-radius: 50% 50% 0 0;
+      background: linear-gradient(180deg, rgba(37,142,150,.17), rgba(3,26,39,.03));
+      border-top: 1px solid rgba(182, 221, 213, .14);
+      transform: rotate(-4deg);
+    }
+    .sea-cliff {
+      position: absolute;
+      left: -4%;
+      bottom: 16%;
+      width: 36%;
+      height: 35%;
+      background: linear-gradient(135deg, #123b45, #071b29 80%);
+      clip-path: polygon(0 30%, 20% 19%, 35% 42%, 52% 5%, 70% 32%, 100% 100%, 0 100%);
+      opacity: .72;
+    }
+    .sea-cliff--far {
+      left: auto;
+      right: -6%;
+      bottom: 18%;
+      width: 35%;
+      height: 29%;
+      background: linear-gradient(150deg, #174d55, #082534 76%);
+      clip-path: polygon(0 100%, 23% 44%, 39% 58%, 61% 0, 78% 24%, 100% 46%, 100% 100%);
+      opacity: .62;
+    }
+    .ocean {
+      position: absolute;
+      left: -10%;
+      right: -10%;
+      bottom: -11%;
+      height: 45%;
+      border-radius: 48% 48% 0 0;
+      background:
+        repeating-linear-gradient(172deg, transparent 0 17px, rgba(154,223,213,.1) 18px 19px, transparent 20px 34px),
+        linear-gradient(180deg, #14717a 0%, #0a495b 44%, #061d2d 100%);
+      box-shadow: inset 0 12px 35px rgba(96,196,185,.13);
+      transform: rotate(2deg);
+    }
+    .moon-path {
+      position: absolute;
+      right: 10%;
+      bottom: 13%;
+      width: 25%;
+      height: 34%;
+      border-radius: 50%;
+      background: linear-gradient(180deg, rgba(245,218,168,.35), rgba(245,218,168,.02) 78%);
+      filter: blur(12px);
+      transform: rotate(7deg);
+    }
+    .ship {
+      position: absolute;
+      z-index: 2;
+      top: 37%;
+      right: 12%;
+      width: clamp(150px, 23vw, 300px);
+      height: auto;
+      overflow: visible;
+      filter: drop-shadow(0 18px 18px rgba(0, 11, 19, .38));
+      animation: ship-float 6.5s ease-in-out infinite;
+      transform-origin: 50% 80%;
+    }
+
+    .card-head,
+    .card-content,
+    .card-foot {
+      position: relative;
+      z-index: 2;
+      margin: clamp(18px, 2.3vw, 32px);
+    }
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 0;
+    }
+    .world-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      color: rgba(246, 251, 255, .84);
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: .2em;
+      text-shadow: 0 2px 12px rgba(0,0,0,.35);
+    }
+    .world-label b {
+      color: rgba(246, 251, 255, .52);
+      font-size: 9px;
+      font-weight: 750;
+    }
+    .world-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 10px;
+      border: 1px solid rgba(255,255,255,.25);
+      border-radius: 999px;
+      background: rgba(7, 22, 33, .25);
+      color: rgba(248,252,255,.88);
+      font-size: 8px;
+      font-weight: 900;
+      letter-spacing: .13em;
+      backdrop-filter: blur(10px);
+      white-space: nowrap;
+    }
+    .world-status i {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #a8e3c7;
+      box-shadow: 0 0 9px rgba(168,227,199,.75);
+    }
+    .world-card--sea .world-status {
+      border-color: rgba(244,222,181,.3);
+      color: #f2dfb9;
+      background: rgba(7,22,33,.33);
+    }
+    .world-card--sea .world-status i { background: #f0cc83; box-shadow: 0 0 9px rgba(240,204,131,.72); }
+
+    .card-content {
+      align-self: stretch;
+      margin-top: auto;
+      margin-bottom: clamp(18px, 2.3vw, 31px);
+      padding-top: clamp(92px, 12vh, 150px);
+    }
+    .card-kicker {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 12px;
+      color: #d5f1fb;
+      font-size: 9px;
+      font-weight: 950;
+      letter-spacing: .25em;
+      text-shadow: 0 2px 15px rgba(0,20,31,.28);
+    }
+    .card-kicker::before {
+      width: 20px;
+      height: 1px;
+      background: currentColor;
+      content: "";
+      opacity: .7;
+    }
+    .world-card--sea .card-kicker { color: #f4dbaa; }
+    .card-title {
+      margin: 0;
+      color: #fff;
+      font-size: clamp(52px, 7.1vw, 106px);
+      font-weight: 1000;
+      letter-spacing: -.075em;
+      line-height: .83;
+      text-shadow: 0 7px 30px rgba(0, 18, 31, .22);
+      white-space: nowrap;
+    }
+    .card-title span { color: #c2efff; }
+    .world-card--sea .card-title { font-size: clamp(43px, 6.1vw, 91px); letter-spacing: -.07em; }
+    .world-card--sea .card-title span { color: #f0d6a0; }
+    .card-description {
+      max-width: 340px;
+      margin: 17px 0 0;
+      color: rgba(247, 252, 255, .87);
+      font-size: clamp(12px, 1.12vw, 15px);
+      font-weight: 540;
+      line-height: 1.6;
+      text-shadow: 0 2px 13px rgba(0, 16, 26, .4);
+    }
+    .card-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 18px;
+      min-height: 49px;
+      margin-top: 23px;
+      padding: 0 10px 0 17px;
+      border: 1px solid rgba(255,255,255,.48);
+      border-radius: 12px;
+      background: rgba(247, 252, 255, .96);
+      box-shadow: 0 12px 28px rgba(0, 18, 30, .2), inset 0 1px 0 rgba(255,255,255,.9);
+      color: #103246;
+      transition: transform 220ms ease, background 220ms ease, box-shadow 220ms ease;
+    }
+    .action-copy {
+      font-size: 10px;
+      font-weight: 950;
+      letter-spacing: .16em;
+    }
+    .action-key {
+      display: inline-grid;
+      min-width: 22px;
+      height: 25px;
+      place-items: center;
+      border: 1px solid rgba(13, 48, 66, .17);
+      border-radius: 6px;
+      background: rgba(11, 52, 72, .06);
+      color: #315668;
+      font-size: 9px;
+      font-weight: 900;
+    }
+    .action-arrow {
+      display: grid;
+      width: 29px;
+      height: 29px;
+      place-items: center;
+      border-radius: 8px;
+      background: #e2f4fa;
+      color: #164359;
+      font-size: 18px;
+      line-height: 1;
+      transition: transform 220ms ease, background 220ms ease;
+    }
+    .world-card--sea .card-action {
+      border-color: rgba(246, 224, 182, .74);
+      background: #f2dfb8;
+      color: #193843;
+    }
+    .world-card--sea .action-key { border-color: rgba(63,53,32,.18); color: #665235; }
+    .world-card--sea .action-arrow { background: #e4c98f; color: #26414a; }
+    .world-card:hover .card-action { transform: translateY(-2px); box-shadow: 0 16px 35px rgba(0,18,30,.29); }
+    .world-card:hover .action-arrow { transform: translate(2px,-2px); background: #d1eff8; }
+    .world-card--sea:hover .action-arrow { background: #fff0ce; }
+
+    .card-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 0;
+      padding-top: 13px;
+      border-top: 1px solid rgba(255,255,255,.22);
+      color: rgba(246, 251, 255, .78);
+      font-size: 8px;
+      font-weight: 900;
+      letter-spacing: .17em;
+      text-shadow: 0 2px 10px rgba(0,0,0,.35);
+    }
+    .card-foot-right {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: rgba(246,251,255,.66);
+      white-space: nowrap;
+    }
+    .card-foot-right::before {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: currentColor;
+      content: "";
+      opacity: .7;
+    }
+    .world-card--sea .card-foot { border-color: rgba(245,222,179,.28); color: rgba(250,239,216,.84); }
+    .world-card--sea .card-foot-right { color: rgba(250,239,216,.7); }
+
+    .footer-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-width: 0;
+      color: #8096a3;
+      font-size: 8px;
+      font-weight: 850;
+      letter-spacing: .16em;
+    }
+    .footer-brand { color: #a7bbc6; }
+    .keyboard-hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .key-hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #9eb1bc;
+      white-space: nowrap;
+    }
+    kbd {
+      display: inline-grid;
+      min-width: 19px;
+      height: 20px;
+      place-items: center;
+      padding: 0 5px;
+      border: 1px solid rgba(206, 229, 239, .18);
+      border-bottom-color: rgba(206,229,239,.3);
+      border-radius: 5px;
+      background: rgba(255,255,255,.045);
+      color: #d6e5ec;
+      font-family: inherit;
+      font-size: 9px;
+      font-weight: 900;
+      box-shadow: 0 2px 0 rgba(0,0,0,.22);
+    }
+
+    @keyframes sun-breathe {
+      0%, 100% { transform: scale(1); opacity: .95; }
+      50% { transform: scale(1.035); opacity: 1; }
+    }
+    @keyframes moon-drift {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-7px); }
+    }
+    @keyframes ship-float {
+      0%, 100% { transform: translateY(0) rotate(-1deg); }
+      50% { transform: translateY(-8px) rotate(1deg); }
+    }
+
+    @media (max-width: 900px) {
+      .launcher { padding-right: 22px; padding-left: 22px; }
+      .card-head, .card-content, .card-foot { margin-right: 21px; margin-left: 21px; }
+      .card-title { font-size: clamp(49px, 8.2vw, 76px); }
+      .world-card--sea .card-title { font-size: clamp(39px, 6.8vw, 65px); }
+      .card-description { max-width: 300px; }
+      .card-action { gap: 12px; }
+    }
+    @media (max-width: 700px) {
+      body { overflow-y: auto; }
       .launcher {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        width: 100%;
-        height: 100vh;
-        height: 100dvh;
-        overflow: hidden;
+        grid-template-rows: auto auto auto auto;
+        min-height: 100svh;
+        gap: 18px;
+        padding: 18px 16px 18px;
       }
-      .choice {
-        position: relative;
-        display: block;
-        width: 100%;
-        height: 100%;
-        min-width: 0;
-        overflow: hidden;
-        isolation: isolate;
-        color: inherit;
-        text-decoration: none;
-        -webkit-tap-highlight-color: transparent;
-        transition: filter 220ms ease;
+      .masthead-meta { padding: 8px 10px; font-size: 8px; letter-spacing: .1em; }
+      .brand-mark { flex-basis: 38px; width: 38px; height: 38px; border-radius: 12px; }
+      .brand-name { font-size: 12px; }
+      .intro { align-items: start; }
+      h1 { font-size: clamp(31px, 7.5vw, 43px); }
+      .step-indicator { display: none; }
+      .world-grid { grid-template-columns: 1fr; gap: 14px; }
+      .world-card { min-height: 450px; border-radius: 22px; }
+      .card-head, .card-content, .card-foot { margin-right: 22px; margin-left: 22px; }
+      .card-head { margin-top: 21px; }
+      .card-content { padding-top: 105px; margin-bottom: 22px; }
+      .card-title { font-size: clamp(64px, 14vw, 90px); }
+      .world-card--sea .card-title { font-size: clamp(53px, 11vw, 76px); }
+      .card-description { max-width: 330px; font-size: 13px; }
+      .ship { top: 29%; right: 9%; width: clamp(150px, 38vw, 220px); }
+      .sea-moon { top: 13%; right: 14%; width: 100px; }
+      .cork-sun { top: 13%; right: 13%; width: 116px; }
+      .mountain--far { height: 67%; }
+      .mountain--middle { height: 49%; }
+      .footer-bar { align-items: flex-start; flex-direction: column; gap: 10px; padding: 1px 2px 6px; }
+      .keyboard-hint { justify-content: flex-start; }
+    }
+    @media (max-width: 390px) {
+      .masthead { gap: 10px; }
+      .masthead-meta { max-width: 112px; justify-content: center; text-align: center; white-space: normal; line-height: 1.35; }
+      .masthead-meta .meta-orbit { flex: 0 0 7px; }
+      .world-card { min-height: 430px; }
+      .card-head, .card-content, .card-foot { margin-right: 17px; margin-left: 17px; }
+      .card-head { margin-top: 17px; }
+      .world-status { padding: 7px 8px; font-size: 7px; }
+      .world-label { font-size: 8px; letter-spacing: .14em; }
+      .card-content { padding-top: 88px; }
+      .card-title { font-size: 59px; }
+      .world-card--sea .card-title { font-size: 48px; }
+      .card-description { font-size: 12px; }
+      .card-action { min-height: 45px; margin-top: 19px; padding-left: 12px; gap: 9px; }
+      .action-copy { font-size: 9px; }
+      .card-foot { font-size: 7px; letter-spacing: .1em; }
+      .card-foot-right { font-size: 7px; }
+    }
+    @media (max-height: 720px) and (min-width: 701px) {
+      body { overflow-y: auto; }
+      .launcher { min-height: 720px; }
+      .world-card { min-height: 430px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
       }
-      .choice:focus-visible {
-        z-index: 5;
-        outline: 4px solid #fff;
-        outline-offset: -9px;
-      }
-      .choice:hover { filter: brightness(1.08) saturate(1.12); }
-      .choice-ski {
-        border-right: 1px solid rgba(255,255,255,.34);
-        background:
-          radial-gradient(ellipse at 62% 25%, rgba(192,236,255,.45), transparent 34%),
-          linear-gradient(155deg, #102b49 0%, #1d5878 48%, #9bc9d8 100%);
-      }
-      .choice-ski::before,
-      .choice-ski::after,
-      .choice-sea::before,
-      .choice-sea::after {
-        content: "";
-        position: absolute;
-        pointer-events: none;
-      }
-      .choice-ski::before {
-        z-index: 0;
-        left: -8%;
-        right: -8%;
-        bottom: -2%;
-        height: 61%;
-        background: linear-gradient(145deg, #e8f8fc 0%, #b3dce9 48%, #729eaf 100%);
-        clip-path: polygon(0 66%, 13% 38%, 22% 52%, 38% 7%, 49% 43%, 60% 17%, 77% 62%, 89% 34%, 100% 57%, 100% 100%, 0 100%);
-      }
-      .choice-ski::after {
-        z-index: 1;
-        left: -10%;
-        right: -10%;
-        bottom: -8%;
-        height: 43%;
-        background: linear-gradient(160deg, #f8fdff 0%, #d6edf4 55%, #9ac5d2 100%);
-        clip-path: polygon(0 35%, 15% 22%, 28% 42%, 45% 14%, 61% 40%, 76% 20%, 100% 38%, 100% 100%, 0 100%);
-      }
-      .ski-sun {
-        position: absolute;
-        z-index: 0;
-        top: 17%;
-        right: 18%;
-        width: clamp(100px, 13vw, 190px);
-        aspect-ratio: 1;
-        border-radius: 50%;
-        background: radial-gradient(circle, #fff 0%, #e4f8ff 36%, rgba(190,237,255,.12) 72%, transparent 73%);
-        filter: drop-shadow(0 0 34px rgba(218,247,255,.35));
-      }
-      .ski-peak {
-        position: absolute;
-        z-index: 1;
-        right: -7%;
-        bottom: 12%;
-        width: 83%;
-        height: 57%;
-        background: linear-gradient(145deg, #eaf8fc, #7faebf 74%);
-        clip-path: polygon(0 100%, 35% 17%, 47% 42%, 64% 0, 100% 100%);
-        opacity: .68;
-      }
-      .ski-peak-front {
-        right: 4%;
-        bottom: 13%;
-        width: 66%;
-        height: 44%;
-        background: linear-gradient(155deg, #fff 0%, #d6edf4 52%, #8bb8c7 100%);
-        clip-path: polygon(0 100%, 28% 31%, 43% 50%, 66% 0, 100% 100%);
-        opacity: .95;
-      }
-      .ski-slope {
-        position: absolute;
-        z-index: 2;
-        right: -15%;
-        bottom: -9%;
-        width: 76%;
-        height: 45%;
-        border-radius: 50% 0 0 0;
-        transform: rotate(-12deg);
-        background: linear-gradient(165deg, rgba(255,255,255,.98), rgba(205,236,245,.66));
-        box-shadow: inset 0 18px 30px rgba(255,255,255,.35);
-      }
-      .ski-trees {
-        position: absolute;
-        z-index: 2;
-        right: 7%;
-        bottom: 16%;
-        color: rgba(16,54,75,.34);
-        font-size: clamp(2rem, 5vw, 5rem);
-        letter-spacing: -.3em;
-        transform: rotate(-7deg);
-        white-space: nowrap;
-      }
-      .choice-sea {
-        background:
-          radial-gradient(ellipse at 55% 28%, rgba(36,139,153,.34), transparent 35%),
-          linear-gradient(155deg, #071827 0%, #0c3447 48%, #0b6170 100%);
-      }
-      .choice-sea::before {
-        z-index: 0;
-        left: -8%;
-        right: -8%;
-        bottom: -4%;
-        height: 50%;
-        background: linear-gradient(170deg, #0b5266, #082d45 80%);
-        clip-path: polygon(0 26%, 12% 18%, 24% 30%, 39% 14%, 54% 31%, 69% 13%, 82% 28%, 100% 15%, 100% 100%, 0 100%);
-      }
-      .choice-sea::after {
-        z-index: 1;
-        left: -8%;
-        right: -8%;
-        bottom: -10%;
-        height: 36%;
-        background: linear-gradient(160deg, rgba(26,145,157,.8), rgba(3,30,49,.98));
-        clip-path: polygon(0 30%, 15% 15%, 29% 33%, 45% 17%, 60% 32%, 75% 16%, 100% 35%, 100% 100%, 0 100%);
-      }
-      .sea-moon {
-        position: absolute;
-        z-index: 0;
-        top: 17%;
-        right: 19%;
-        width: clamp(95px, 12vw, 170px);
-        aspect-ratio: 1;
-        border-radius: 50%;
-        background: radial-gradient(circle at 38% 35%, #fff4cf, #e5d4a6 52%, rgba(229,212,166,.05) 72%, transparent 73%);
-        box-shadow: 0 0 75px rgba(238,212,148,.22);
-      }
-      .sea-stars {
-        position: absolute;
-        z-index: 1;
-        top: 31%;
-        right: 5%;
-        color: rgba(247,225,178,.72);
-        font-size: clamp(1rem, 2.6vw, 2.5rem);
-        letter-spacing: .65em;
-        white-space: nowrap;
-      }
-      .sea-ship {
-        position: absolute;
-        z-index: 2;
-        right: 13%;
-        bottom: 29%;
-        font-size: clamp(7rem, 17vw, 15rem);
-        line-height: 1;
-        color: #f0d9a5;
-        filter: drop-shadow(0 15px 26px rgba(0,0,0,.28));
-        transform: scaleX(1.12);
-      }
-      .sea-skull {
-        position: absolute;
-        z-index: 3;
-        top: 42%;
-        right: 29%;
-        color: #173542;
-        font-size: clamp(1.3rem, 2.7vw, 2.5rem);
-        text-shadow: 0 1px 0 rgba(255,255,255,.25);
-      }
-      .topline {
-        position: absolute;
-        z-index: 4;
-        top: clamp(22px, 4.5vh, 48px);
-        left: clamp(22px, 4vw, 58px);
-        right: clamp(22px, 4vw, 58px);
-        display: flex;
-        align-items: center;
-        gap: 13px;
-      }
-      .mark {
-        display: inline-grid;
-        flex: 0 0 42px;
-        width: 42px;
-        height: 42px;
-        place-items: center;
-        border: 1px solid rgba(255,255,255,.52);
-        border-radius: 50%;
-        background: rgba(255,255,255,.08);
-        color: #effaff;
-        font-size: 12px;
-        font-weight: 900;
-        letter-spacing: -.04em;
-        backdrop-filter: blur(8px);
-      }
-      .sea-mark {
-        border-color: rgba(244,223,173,.55);
-        background: rgba(244,223,173,.08);
-        color: #f4dfad;
-      }
-      .edition {
-        color: rgba(244,250,255,.76);
-        font-size: 10px;
-        font-weight: 800;
-        letter-spacing: .22em;
-      }
-      .hero {
-        position: absolute;
-        z-index: 4;
-        top: 49%;
-        left: clamp(24px, 6vw, 88px);
-        right: clamp(24px, 5vw, 72px);
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        transform: translateY(-50%);
-      }
-      .eyebrow {
-        margin-bottom: 13px;
-        color: #d9f2fc;
-        font-size: clamp(9px, 1vw, 13px);
-        font-weight: 900;
-        letter-spacing: .28em;
-      }
-      .sea-eyebrow { color: #f0d8a5; }
-      h1 {
-        margin: 0;
-        color: #fff;
-        font-family: "Barlow Condensed", Impact, "Arial Narrow", sans-serif;
-        font-size: clamp(76px, 10.5vw, 164px);
-        font-weight: 900;
-        line-height: .82;
-        letter-spacing: -.055em;
-        text-shadow: 0 7px 35px rgba(0,20,35,.2);
-        white-space: nowrap;
-      }
-      .ski-title span { color: #bfefff; }
-      .sea-title {
-        font-size: clamp(58px, 8.1vw, 130px);
-        letter-spacing: -.05em;
-      }
-      .sea-title span { color: #e8cf98; }
-      .description {
-        max-width: 390px;
-        margin: 22px 0 0;
-        color: rgba(247,252,255,.84);
-        font-size: clamp(12px, 1.25vw, 17px);
-        font-weight: 500;
-        line-height: 1.65;
-      }
-      .cta {
-        display: inline-flex;
-        align-items: center;
-        gap: 30px;
-        margin-top: 32px;
-        padding: 15px 18px 15px 22px;
-        border: 1px solid rgba(255,255,255,.45);
-        border-radius: 3px;
-        background: rgba(240,250,255,.95);
-        box-shadow: 0 10px 30px rgba(0,20,35,.13);
-        color: #102b3f;
-        font-size: 12px;
-        font-weight: 950;
-        letter-spacing: .16em;
-        transition: transform 200ms ease, background 200ms ease;
-      }
-      .sea-cta {
-        border-color: rgba(245,224,181,.75);
-        background: rgba(245,224,181,.96);
-        color: #173443;
-      }
-      .arrow {
-        font-size: 19px;
-        line-height: 1;
-        transition: transform 200ms ease;
-      }
-      .choice:hover .cta { transform: translateY(-3px); background: #fff; }
-      .choice:hover .sea-cta { background: #fff1cf; }
-      .choice:hover .arrow { transform: translate(3px, -3px); }
-      .footer {
-        position: absolute;
-        z-index: 4;
-        left: clamp(22px, 4vw, 58px);
-        right: clamp(22px, 4vw, 58px);
-        bottom: clamp(20px, 3.8vh, 42px);
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-        color: rgba(245,251,255,.72);
-        font-size: 10px;
-        font-weight: 850;
-        letter-spacing: .16em;
-      }
-      .divider {
-        position: absolute;
-        z-index: 5;
-        top: 0;
-        bottom: 0;
-        left: 50%;
-        width: 1px;
-        background: rgba(255,255,255,.28);
-        pointer-events: none;
-      }
-      @media (max-width: 700px) {
-        .topline { gap: 8px; }
-        .mark { flex-basis: 32px; width: 32px; height: 32px; font-size: 10px; }
-        .edition { font-size: 8px; letter-spacing: .12em; }
-        .hero { left: 18px; right: 14px; }
-        h1 { font-size: clamp(44px, 10.5vw, 78px); }
-        .sea-title { font-size: clamp(34px, 7.7vw, 62px); letter-spacing: -.06em; }
-        .description { margin-top: 16px; font-size: 11px; line-height: 1.45; }
-        .cta { gap: 12px; margin-top: 22px; padding: 12px 12px 12px 14px; font-size: 9px; letter-spacing: .1em; }
-        .footer { font-size: 7px; letter-spacing: .08em; }
-        .sea-ship { right: 1%; bottom: 33%; }
-        .sea-skull { right: 26%; }
-        .ski-sun, .sea-moon { right: 7%; top: 22%; }
-      }
-      @media (max-width: 390px) {
-        .edition { display: none; }
-        .footer { left: 14px; right: 14px; }
-        .hero { left: 14px; right: 10px; }
-        h1 { font-size: 42px; }
-        .sea-title { font-size: 33px; }
-        .description { font-size: 10px; }
-        .cta { font-size: 8px; padding: 10px; }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .choice, .cta, .arrow { transition: none; }
-      }
-    </style>
-  </head>
-  <body>
-    <main class="launcher" aria-label="Choose a game">
-      <a class="choice choice-ski" href="/c7" aria-label="Play Cork7 — launch the skiing game">
-        <span class="ski-sun" aria-hidden="true"></span>
-        <span class="ski-peak" aria-hidden="true"></span>
-        <span class="ski-peak ski-peak-front" aria-hidden="true"></span>
-        <span class="ski-slope" aria-hidden="true"></span>
-        <span class="ski-trees" aria-hidden="true">♠　♠　♠</span>
-        <span class="topline">
-          <span class="mark">C7</span>
-          <span class="edition">THE WINTER RUN</span>
+    }
+  </style>
+</head>
+<body>
+  <main class="launcher" aria-labelledby="page-title">
+    <header class="masthead">
+      <a class="brand" href="/" aria-label="Cork7 Game World home">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none">
+            <path d="M3.5 22.5 11.4 9l4.5 7.4L20 8l8.5 14.5H3.5Z" stroke="currentColor" stroke-width="1.55" stroke-linejoin="round"/>
+            <path d="m8 22.5 3.2-5.2 3.1 5.2m2.5 0 3.3-5.3 3.2 5.3" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round" opacity=".62"/>
+            <path d="M5 27h22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".7"/>
+          </svg>
         </span>
-        <span class="hero">
-          <span class="eyebrow">FIND YOUR LINE</span>
-          <h1 class="ski-title">CORK<span>7</span></h1>
-          <span class="description">Drop into the mountain. Find your speed. Own the slopes.</span>
-          <span class="cta"><span>PLAY CORK7</span><span class="arrow" aria-hidden="true">↗</span></span>
+        <span class="brand-copy">
+          <span class="brand-overline">THE ARCADE COLLECTION</span>
+          <span class="brand-name">CORK7 WORLDS</span>
         </span>
-        <span class="footer"><span>01 / 02</span><span>SNOW · SPEED · SKILL</span></span>
+      </a>
+      <div class="masthead-meta"><i class="meta-orbit" aria-hidden="true"></i> 2 WORLDS · 1 LAUNCHPAD</div>
+    </header>
+
+    <section class="intro" aria-labelledby="page-title">
+      <div class="intro-copy">
+        <p class="eyebrow">WORLD SELECTION</p>
+        <h1 id="page-title">Pick your next world.</h1>
+        <p class="intro-description">Two different adventures. One click to drop in.</p>
+      </div>
+      <div class="step-indicator" aria-hidden="true">
+        <span class="step-numbers">01<span style="color:#687f8d"> / </span>02</span>
+        <span class="step-label"><span>CHOOSE A PORTAL</span><span>YOUR SESSION STARTS HERE</span></span>
+      </div>
+    </section>
+
+    <section class="world-grid" aria-label="Choose a game">
+      <a class="world-card world-card--cork" href="/c7" data-launch-key="1" aria-label="Play Cork7, the alpine skiing game. Press 1 to launch.">
+        <div class="artwork" aria-hidden="true">
+          <span class="cork-sun"></span>
+          <span class="mountain mountain--far"></span>
+          <span class="mountain mountain--middle"></span>
+          <span class="mountain mountain--front"></span>
+          <span class="ski-track"></span>
+          <span class="ski-track ski-track--two"></span>
+          <span class="pine-line">♠　♠　♠　♠</span>
+          <span class="snow-drift"></span>
+        </div>
+        <div class="card-head">
+          <span class="world-label"><b>01</b> / THE WINTER RUN</span>
+          <span class="world-status"><i></i> READY TO PLAY</span>
+        </div>
+        <div class="card-content">
+          <p class="card-kicker">FIND YOUR LINE</p>
+          <h2 class="card-title">CORK<span>7</span></h2>
+          <p class="card-description">Drop into the mountain. Find your speed. Own the slopes.</p>
+          <span class="card-action">
+            <span class="action-copy">PLAY CORK7</span>
+            <span class="action-key" aria-hidden="true">1</span>
+            <span class="action-arrow" aria-hidden="true">↗</span>
+          </span>
+        </div>
+        <div class="card-foot">
+          <span>SNOW · SPEED · SKILL</span>
+          <span class="card-foot-right">ALPINE MODE</span>
+        </div>
       </a>
 
-      <a class="choice choice-sea" href="/ss" aria-label="Play SaltySeas — launch the pirate game">
-        <span class="sea-moon" aria-hidden="true"></span>
-        <span class="sea-stars" aria-hidden="true">✦　·　✧　　 ·　✦</span>
-        <span class="sea-ship" aria-hidden="true">⛵</span>
-        <span class="sea-skull" aria-hidden="true">☠</span>
-        <span class="topline">
-          <span class="mark sea-mark">SS</span>
-          <span class="edition">THE OPEN WATERS</span>
-        </span>
-        <span class="hero">
-          <span class="eyebrow sea-eyebrow">CHART YOUR COURSE</span>
-          <h1 class="sea-title">SALTY<span>SEAS</span></h1>
-          <span class="description">Raise the sails. Chase the horizon. The sea is yours.</span>
-          <span class="cta sea-cta"><span>SET SAIL</span><span class="arrow" aria-hidden="true">↗</span></span>
-        </span>
-        <span class="footer"><span>02 / 02</span><span>SAIL · EXPLORE · DISCOVER</span></span>
+      <a class="world-card world-card--sea" href="/ss" data-launch-key="2" aria-label="Play SaltySeas, the pirate sailing game. Press 2 to launch.">
+        <div class="artwork" aria-hidden="true">
+          <span class="stars"></span>
+          <span class="sea-moon"></span>
+          <span class="sea-horizon"></span>
+          <span class="sea-cliff"></span>
+          <span class="sea-cliff sea-cliff--far"></span>
+          <span class="moon-path"></span>
+          <svg class="ship" viewBox="0 0 300 220" fill="none" aria-hidden="true">
+            <path d="M151 25v137" stroke="#e9ddc0" stroke-width="5" stroke-linecap="round"/>
+            <path d="M145 35 75 133h70V35Z" fill="#f4e8c9" stroke="#b9aa85" stroke-width="2"/>
+            <path d="M158 51 224 137h-66V51Z" fill="#e8d4a7" stroke="#b9aa85" stroke-width="2"/>
+            <path d="M151 45 151 137h-61l61-92Z" fill="#fff4df" stroke="#c9b997" stroke-width="2"/>
+            <path d="M151 25 151 9" stroke="#e4d8ba" stroke-width="3" stroke-linecap="round"/>
+            <path d="M151 12 188 21l-37 7" fill="#c96e55" stroke="#f0c89d" stroke-width="1.4" stroke-linejoin="round"/>
+            <path d="M47 158h196l-23 31H78l-31-31Z" fill="#6b4937" stroke="#e0c28d" stroke-width="3" stroke-linejoin="round"/>
+            <path d="M61 166h169" stroke="#f0d5a4" stroke-width="2" opacity=".75"/>
+            <path d="M108 189h83" stroke="#d8b986" stroke-width="2" stroke-linecap="round" opacity=".8"/>
+            <path d="M41 196c25 8 45 8 67 0 21-8 40-8 61 0 21 8 44 8 69 0" stroke="#b7e4dc" stroke-width="3" stroke-linecap="round" opacity=".75"/>
+            <path d="M21 207c22 7 40 7 59 0s39-7 58 0 39 7 59 0 39-7 60 0" stroke="#74c9c4" stroke-width="2" stroke-linecap="round" opacity=".45"/>
+          </svg>
+          <span class="ocean"></span>
+        </div>
+        <div class="card-head">
+          <span class="world-label"><b>02</b> / THE OPEN WATERS</span>
+          <span class="world-status"><i></i> READY TO PLAY</span>
+        </div>
+        <div class="card-content">
+          <p class="card-kicker">CHART YOUR COURSE</p>
+          <h2 class="card-title">SALTY<span>SEAS</span></h2>
+          <p class="card-description">Raise the sails. Chase the horizon. The sea is yours.</p>
+          <span class="card-action">
+            <span class="action-copy">SET SAIL</span>
+            <span class="action-key" aria-hidden="true">2</span>
+            <span class="action-arrow" aria-hidden="true">↗</span>
+          </span>
+        </div>
+        <div class="card-foot">
+          <span>SAIL · EXPLORE · DISCOVER</span>
+          <span class="card-foot-right">PIRATE MODE</span>
+        </div>
       </a>
-      <span class="divider" aria-hidden="true"></span>
-    </main>
-  </body>
+    </section>
+
+    <footer class="footer-bar">
+      <span class="footer-brand">CORK7 WORLDS <span style="color:#526b78">/</span> CHOOSE YOUR ADVENTURE</span>
+      <span class="keyboard-hint" aria-label="Keyboard shortcuts">
+        <span class="key-hint"><kbd>1</kbd> CORK7</span>
+        <span class="key-hint"><kbd>2</kbd> SALTYSEAS</span>
+        <span class="key-hint">OR SELECT A CARD</span>
+      </span>
+    </footer>
+  </main>
+
+  <script>
+    (() => {
+      const launchTargets = new Map([
+        ["1", document.querySelector('[data-launch-key="1"]')],
+        ["2", document.querySelector('[data-launch-key="2"]')]
+      ]);
+
+      document.addEventListener("keydown", (event) => {
+        if (event.defaultPrevented || event.repeat || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+
+        const activeElement = document.activeElement;
+        const editable = activeElement && (
+          activeElement.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(activeElement.tagName)
+        );
+        if (editable) return;
+
+        const target = launchTargets.get(event.key);
+        if (!target) return;
+
+        event.preventDefault();
+        target.click();
+      });
+    })();
+  </script>
+</body>
 </html>

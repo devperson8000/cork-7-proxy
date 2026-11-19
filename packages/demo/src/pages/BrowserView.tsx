@@ -9,6 +9,37 @@ const DEFAULT_ALLOWED_GAME_HOSTS = new Set([
 	"live.cork7.com",
 ]);
 
+function getSitePresentation() {
+	const runtimeConfig = (window as typeof window & {
+		CORK7_CONFIG?: { targetUrl?: unknown };
+	}).CORK7_CONFIG;
+	try {
+		if (typeof runtimeConfig?.targetUrl === "string") {
+			const hostname = new URL(runtimeConfig.targetUrl).hostname.toLowerCase();
+			if (hostname === "saltyseas.io") {
+				return {
+					name: "Saltyseas",
+					mark: "☠",
+					loadingTitle: "SETTING SAIL TO SALTYSEAS",
+					loadingDetail: "Preparing your pirate waters session",
+					errorDetail: "Refresh the page to reconnect to Saltyseas.",
+					frameTitle: "Saltyseas game",
+				};
+			}
+		}
+	} catch {
+		// Safe navigation below handles invalid target configuration.
+	}
+	return {
+		name: "Cork7",
+		mark: "C7",
+		loadingTitle: "ASCENDING TO CORK7",
+		loadingDetail: "Preparing your alpine session",
+		errorDetail: "Refresh the page to reconnect to Cork7.",
+		frameTitle: "Cork7 game",
+	};
+}
+
 function getSafeInitialUrl(): string {
 	const runtimeConfig = (window as typeof window & {
 		CORK7_CONFIG?: { targetUrl?: unknown; allowedHosts?: unknown };
@@ -58,6 +89,8 @@ const BrowserView: Component<
 		frameel: HTMLIFrameElement;
 	}
 > = function (cx) {
+	const presentation = getSitePresentation();
+
 	cx.mount = async () => {
 		const gameRoot = this.frameel.parentElement;
 		const loadingTitle = gameRoot?.querySelector<HTMLElement>(".loading-title");
@@ -101,7 +134,7 @@ const BrowserView: Component<
 					fullscreenButton.title = "Fullscreen is not supported by this browser";
 				}
 			} catch (error) {
-				console.warn("Cork7 fullscreen mode could not be changed:", error);
+				console.warn("Player fullscreen mode could not be changed:", error);
 			}
 		};
 
@@ -115,7 +148,7 @@ const BrowserView: Component<
 			gameRoot?.classList.add("is-error");
 			if (loadingTitle) loadingTitle.textContent = "PLAYER UNAVAILABLE";
 			if (loadingDetail) loadingDetail.textContent = detail
-				? "Refresh the page to reconnect to Cork7."
+				? presentation.errorDetail
 				: "The player could not start. Refresh to try again.";
 		};
 
@@ -132,11 +165,11 @@ const BrowserView: Component<
 					const targetUrl = getSafeInitialUrl();
 					const navigation = frame.go(targetUrl);
 					Promise.resolve(navigation).catch((error) => {
-						console.error("Could not open the Cork7 game frame:", error);
+						console.error("Could not open the " + presentation.name + " game frame:", error);
 						showStartupError(error);
 					});
 				} catch (error) {
-					console.error("Could not open the Cork7 game frame:", error);
+					console.error("Could not open the " + presentation.name + " game frame:", error);
 					showStartupError(error);
 				}
 			};
@@ -144,7 +177,7 @@ const BrowserView: Component<
 			this.frameel.addEventListener("load", navigate, { once: true });
 			this.frameel.src = "about:blank";
 		} catch (error) {
-			console.error("Cork7 player initialization failed:", error);
+			console.error(presentation.name + " player initialization failed:", error);
 			showStartupError(error);
 		}
 	};
@@ -152,14 +185,14 @@ const BrowserView: Component<
 	return (
 		<div class="game-frame">
 			<div class="game-loading" role="status" aria-live="polite">
-				<div class="loading-mark">C7</div>
+				<div class="loading-mark">{presentation.mark}</div>
 				<div class="loading-spinner" aria-hidden="true"></div>
-				<div class="loading-title">CONNECTING TO CORK7</div>
-				<div class="loading-detail">Preparing your game session</div>
+				<div class="loading-title">{presentation.loadingTitle}</div>
+				<div class="loading-detail">{presentation.loadingDetail}</div>
 			</div>
 			<iframe
 				this={use(this.frameel)}
-				title="Cork7 game"
+				title={presentation.frameTitle}
 				allow="autoplay; fullscreen; gamepad"
 				allowfullscreen
 				referrerpolicy="no-referrer"
@@ -178,12 +211,7 @@ const BrowserView: Component<
 };
 
 BrowserView.style = css`
-	:scope {
-		display: flex;
-		flex: 1 1 auto;
-		min-width: 0;
-		min-height: 0;
-	}
+	:scope { display: flex; flex: 1 1 auto; min-width: 0; min-height: 0; }
 	.game-frame {
 		position: relative;
 		contain: layout paint;
@@ -192,142 +220,68 @@ BrowserView.style = css`
 		min-height: 0;
 		overflow: hidden;
 		border: 0;
-		border-radius: 0;
+		border-radius: 12px;
 		background: #000;
+		box-shadow: 0 20px 70px rgba(0, 0, 0, .3);
 	}
-	.game-frame:fullscreen,
-	.game-frame:-webkit-full-screen {
-		width: 100vw;
-		height: 100vh;
-		min-width: 100vw;
-		min-height: 100vh;
-		max-width: none;
-		max-height: none;
-		margin: 0;
-		border: 0;
-		border-radius: 0;
-		background: #000;
-		box-shadow: none;
+	.game-frame:fullscreen, .game-frame:-webkit-full-screen {
+		width: 100vw; height: 100vh; min-width: 100vw; min-height: 100vh;
+		max-width: none; max-height: none; margin: 0; border: 0; border-radius: 0;
+		background: #000; box-shadow: none;
 	}
 	iframe {
-		position: absolute;
-		inset: 0;
-		display: block;
-		width: 100%;
-		height: 100%;
-		border: 0;
-		background: #000;
-		/* Keep the game surface independently composited from the player UI. */
-		transform: translate3d(0, 0, 0);
-		backface-visibility: hidden;
+		position: absolute; inset: 0; display: block; width: 100%; height: 100%;
+		border: 0; background: #000;
+		transform: translate3d(0, 0, 0); backface-visibility: hidden;
 	}
 	.game-loading {
-		position: absolute;
-		z-index: 2;
-		inset: 0;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 11px;
-		background:
-			radial-gradient(ellipse at 50% 42%, rgba(39, 79, 82, .2), transparent 42%),
-			#080d13;
-		color: #eff5f6;
-		opacity: 1;
-		visibility: visible;
-		transition: opacity .22s ease, visibility .22s ease;
-		pointer-events: none;
+		position: absolute; z-index: 2; inset: 0; display: flex; flex-direction: column;
+		align-items: center; justify-content: center; gap: 11px;
+		background: radial-gradient(ellipse at 50% 42%, var(--accent-soft), transparent 43%), #08131e;
+		color: #eff5f6; opacity: 1; visibility: visible;
+		transition: opacity .22s ease, visibility .22s ease; pointer-events: none;
 	}
 	.game-frame.is-loaded .game-loading { opacity: 0; visibility: hidden; }
 	.game-frame.is-error .game-loading { opacity: 1; visibility: visible; }
 	.loading-mark {
-		display: grid;
-		width: 42px;
-		height: 42px;
-		place-items: center;
-		border: 1px solid rgba(151, 215, 203, .42);
-		border-radius: 12px;
-		background: rgba(91, 151, 143, .1);
-		color: #b6e7dc;
-		font-size: 15px;
-		font-weight: 850;
-		letter-spacing: -.08em;
+		display: grid; width: 48px; height: 48px; place-items: center;
+		border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+		border-radius: 15px; background: var(--accent-soft); color: var(--accent);
+		font-size: 17px; font-weight: 900; letter-spacing: -.08em;
 	}
 	.loading-spinner {
-		width: 18px;
-		height: 18px;
-		border: 2px solid rgba(151, 190, 193, .2);
-		border-top-color: #9bd6ca;
-		border-radius: 50%;
-		animation: cork7-spin .8s linear infinite;
+		width: 19px; height: 19px; border: 2px solid rgba(151, 190, 193, .2);
+		border-top-color: var(--accent); border-radius: 50%;
+		animation: player-spin .8s linear infinite;
 	}
 	.game-frame.is-error .loading-spinner { display: none; }
-	.loading-title {
-		margin-top: 3px;
-		color: #dce9eb;
-		font-size: 10px;
-		font-weight: 800;
-		letter-spacing: .18em;
-	}
-	.loading-detail {
-		color: #788d9b;
-		font-size: 11px;
-		letter-spacing: .02em;
-	}
+	.loading-title { margin-top: 3px; color: #e3edf1; font-size: 10px; font-weight: 850; letter-spacing: .18em; text-align: center; }
+	.loading-detail { color: #8296a2; font-size: 11px; letter-spacing: .02em; text-align: center; }
 	.fullscreen-toggle {
-		position: absolute;
-		z-index: 5;
-		top: 14px;
-		right: 14px;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		gap: 8px;
-		min-height: 36px;
-		padding: 0 12px;
-		border: 1px solid rgba(196, 220, 225, .2);
-		border-radius: 9px;
-		background: rgba(7, 13, 20, .96);
-		color: #e7f0f1;
-		font: inherit;
-		font-size: 10px;
-		font-weight: 750;
-		letter-spacing: .08em;
-		cursor: pointer;
-		transition: background .16s ease, border-color .16s ease, opacity .16s ease;
+		position: absolute; z-index: 5; top: 14px; right: 14px;
+		display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+		min-height: 36px; padding: 0 12px; border: 1px solid rgba(196, 220, 225, .2);
+		border-radius: 9px; background: rgba(7, 13, 20, .96); color: #e7f0f1;
+		font: inherit; font-size: 10px; font-weight: 750; letter-spacing: .08em;
+		cursor: pointer; transition: background .16s ease, border-color .16s ease, opacity .16s ease;
 	}
-	.fullscreen-toggle:hover,
-	.fullscreen-toggle:focus-visible {
-		border-color: rgba(157, 220, 208, .55);
-		background: rgba(16, 31, 39, .94);
-		outline: none;
+	.fullscreen-toggle:hover, .fullscreen-toggle:focus-visible {
+		border-color: var(--accent); background: rgba(16, 31, 39, .94); outline: none;
 	}
 	.fullscreen-toggle svg {
-		width: 15px;
-		height: 15px;
-		fill: none;
-		stroke: currentColor;
-		stroke-width: 1.7;
-		stroke-linecap: round;
-		stroke-linejoin: round;
+		width: 15px; height: 15px; fill: none; stroke: currentColor;
+		stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
 	}
 	.fullscreen-exit-icon { display: none; }
 	.fullscreen-toggle.is-active .fullscreen-enter-icon { display: none; }
 	.fullscreen-toggle.is-active .fullscreen-exit-icon { display: block; }
-	.game-frame:fullscreen .fullscreen-toggle,
-	.game-frame:-webkit-full-screen .fullscreen-toggle {
-		opacity: .2;
-	}
-	.game-frame:fullscreen .fullscreen-toggle:hover,
-	.game-frame:fullscreen .fullscreen-toggle:focus-visible,
-	.game-frame:-webkit-full-screen .fullscreen-toggle:hover,
-	.game-frame:-webkit-full-screen .fullscreen-toggle:focus-visible {
-		opacity: 1;
-	}
-	@keyframes cork7-spin { to { transform: rotate(360deg); } }
+	.game-frame:fullscreen .fullscreen-toggle, .game-frame:-webkit-full-screen .fullscreen-toggle { opacity: .2; }
+	.game-frame:fullscreen .fullscreen-toggle:hover, .game-frame:fullscreen .fullscreen-toggle:focus-visible,
+	.game-frame:-webkit-full-screen .fullscreen-toggle:hover, .game-frame:-webkit-full-screen .fullscreen-toggle:focus-visible { opacity: 1; }
+	@keyframes player-spin { to { transform: rotate(360deg); } }
 	@media (max-width: 600px) {
 		.fullscreen-toggle { top: 9px; right: 9px; min-height: 34px; padding: 0 10px; }
+		.loading-title { max-width: calc(100vw - 44px); font-size: 9px; }
 	}
 	@media (prefers-reduced-motion: reduce) {
 		.loading-spinner { animation-duration: 1.6s; }

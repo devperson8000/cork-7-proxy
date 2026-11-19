@@ -13,8 +13,8 @@ assert.match(html, /data-launch-key=["']2["']/, "SaltySeas shortcut hint must be
 assert.match(html, /prefers-reduced-motion/, "motion preferences must be respected");
 assert.match(html, /addEventListener\(["']keydown["']/, "keyboard launch shortcuts must be wired");
 
-assert.match(html, /\\.artwork\\s*\\{[^}]*z-index:\\s*0/s, "artwork must sit above the card background");
-assert.match(html, /\\.world-card::before\\s*\\{[^}]*z-index:\\s*1/s, "contrast overlay must sit above artwork");
-assert.match(html, /\\.card-head,\\s*\\.card-content,\\s*\\.card-foot\\s*\\{[^}]*z-index:\\s*3/s, "card content must sit above both overlays");
+assert.match(html, /\.artwork\s*\{[^}]*z-index:\s*0/s, "artwork must sit above the card background");
+assert.match(html, /\.world-card::before\s*\{[^}]*z-index:\s*1/s, "contrast overlay must sit above artwork");
+assert.match(html, /\.card-head,\s*\.card-content,\s*\.card-foot\s*\{[^}]*z-index:\s*3/s, "card content must sit above both overlays");
 
 console.log("Launcher contract: 10 assertions passed");

@@ -14,6 +14,17 @@ function getSitePresentation() {
 		CORK7_CONFIG?: { targetUrl?: unknown };
 	}).CORK7_CONFIG;
 	try {
+		if (runtimeConfig?.site === "saltyseas") {
+			return {
+				name: "Saltyseas",
+				mark: "☠",
+				loadingTitle: "SETTING SAIL TO SALTYSEAS",
+				loadingDetail: "Preparing your pirate waters session",
+				slowDetail: "Saltyseas is taking longer than expected to respond.",
+				errorDetail: "Refresh the page to reconnect to Saltyseas.",
+				frameTitle: "Saltyseas game",
+			};
+		}
 		if (typeof runtimeConfig?.targetUrl === "string") {
 			const hostname = new URL(runtimeConfig.targetUrl).hostname.toLowerCase();
 			if (hostname === "saltyseas.io") {
@@ -22,6 +33,7 @@ function getSitePresentation() {
 					mark: "☠",
 					loadingTitle: "SETTING SAIL TO SALTYSEAS",
 					loadingDetail: "Preparing your pirate waters session",
+					slowDetail: "Saltyseas is taking longer than expected to respond.",
 					errorDetail: "Refresh the page to reconnect to Saltyseas.",
 					frameTitle: "Saltyseas game",
 				};
@@ -35,6 +47,7 @@ function getSitePresentation() {
 		mark: "C7",
 		loadingTitle: "ASCENDING TO CORK7",
 		loadingDetail: "Preparing your alpine session",
+		slowDetail: "Cork7 is taking longer than expected to respond.",
 		errorDetail: "Refresh the page to reconnect to Cork7.",
 		frameTitle: "Cork7 game",
 	};
@@ -42,7 +55,7 @@ function getSitePresentation() {
 
 function getSafeInitialUrl(): string {
 	const runtimeConfig = (window as typeof window & {
-		CORK7_CONFIG?: { targetUrl?: unknown; allowedHosts?: unknown };
+		CORK7_CONFIG?: { site?: unknown; targetUrl?: unknown; allowedHosts?: unknown };
 	}).CORK7_CONFIG;
 	const configuredUrl =
 		typeof runtimeConfig?.targetUrl === "string"
@@ -97,6 +110,12 @@ const BrowserView: Component<
 		const loadingDetail = gameRoot?.querySelector<HTMLElement>(".loading-detail");
 		const fullscreenButton = gameRoot?.querySelector<HTMLButtonElement>(".fullscreen-toggle");
 		const fullscreenDocument = document as WebkitFullscreenDocument;
+		const slowLoadingTimer = window.setTimeout(() => {
+			if (!gameRoot?.classList.contains("is-loaded") && !gameRoot?.classList.contains("is-error")) {
+				if (loadingDetail) loadingDetail.textContent = presentation.slowDetail;
+				gameRoot?.classList.add("is-slow");
+			}
+		}, 45000);
 
 		const updateFullscreenButton = () => {
 			const active =
@@ -144,6 +163,7 @@ const BrowserView: Component<
 		updateFullscreenButton();
 
 		const showStartupError = (error: unknown) => {
+			window.clearTimeout(slowLoadingTimer);
 			const detail = error instanceof Error ? error.message : String(error);
 			gameRoot?.classList.add("is-error");
 			if (loadingTitle) loadingTitle.textContent = "PLAYER UNAVAILABLE";
@@ -158,6 +178,7 @@ const BrowserView: Component<
 
 			const navigate = () => {
 				this.frameel.addEventListener("load", () => {
+					window.clearTimeout(slowLoadingTimer);
 					gameRoot?.classList.add("is-loaded");
 				}, { once: true });
 
@@ -243,6 +264,7 @@ BrowserView.style = css`
 	}
 	.game-frame.is-loaded .game-loading { opacity: 0; visibility: hidden; }
 	.game-frame.is-error .game-loading { opacity: 1; visibility: visible; }
+	.game-frame.is-slow .loading-detail { color: var(--accent); font-weight: 700; }
 	.loading-mark {
 		display: grid; width: 48px; height: 48px; place-items: center;
 		border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);

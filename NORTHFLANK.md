@@ -1,6 +1,6 @@
 # Deploy the Cork7 player and Wisp backend on Northflank
 
-This service provides both the fixed Cork7 player at `/c7/` and the Wisp WebSocket endpoint at `/wisp/`. The player has no general-purpose address bar. Its initial destination is the official Cork7 game, and the backend allows only exact Cork7 and account API hostnames.
+This service provides the Scramjet player at `/c7/` and the Wisp WebSocket endpoint at `/wisp/`. It opens either the official Cork7 game or the dedicated Saltyseas destination selected by Vercel's `/ss` route. The backend keeps an exact hostname allowlist; it is not an unrestricted proxy.
 
 ## 1. Northflank service
 
@@ -18,11 +18,11 @@ The first build can take longer because it compiles the Rust WebAssembly rewrite
 | Variable | Value |
 | --- | --- |
 | `PORT` | `3000` |
-| `CORK7_ALLOWED_HOSTS` | `cork7.com,www.cork7.com,live.cork7.com,agfhgulgtsocvioqqxvi.supabase.co` |
+| `CORK7_ALLOWED_HOSTS` | `cork7.com,www.cork7.com,live.cork7.com,agfhgulgtsocvioqqxvi.supabase.co,saltyseas.io` |
 | `ALLOWED_ORIGINS` | `https://cork7game.vercel.app` |
 | `MAX_WS_CONNECTIONS` | `60` |
 
-The official game hosts remain exact entries. The observed account/API host `agfhgulgtsocvioqqxvi.supabase.co` is also included as one exact hostname so the game can reach its Supabase-backed account service. This does not allow every `supabase.co` project or use a wildcard.
+The Cork7 game hosts and the Saltyseas hostname are exact entries. The observed account/API host `agfhgulgtsocvioqqxvi.supabase.co` is also included as one exact hostname so Cork7 can reach its account service. No wildcard hosts are enabled.
 
 ## 3. Networking
 
@@ -40,12 +40,12 @@ Northflank's HTTPS ingress provides TLS. The browser's Wisp connection uses `wss
 ## 4. Confirm the service
 
 - `https://YOUR-NORTHFLANK-HOST/health` should return JSON with `"status":"ok"`.
-- `https://YOUR-NORTHFLANK-HOST/c7/` should return the Cork7 player HTML.
+- `https://YOUR-NORTHFLANK-HOST/c7/` should return the Scramjet player HTML.
 - The `/health` endpoint reports whether the server and built player assets are ready. It does not test an actual game session.
 
 ## 5. Vercel path routing
 
-The Vercel project serving `cork7game.vercel.app` has a route for `/c7/:path*`. Point that route to:
+The Vercel project serving `cork7game.vercel.app` has a route for `/c7/:path*` to serve the player assets and a dedicated `/ss` rewrite to load the same player with the Saltyseas selection. Point the player asset route to:
 
 ```text
 https://YOUR-NORTHFLANK-HOST/c7/:path*
@@ -57,11 +57,12 @@ The existing Vercel `VITE_WISP_URL` environment variable remains available, but 
 
 ## 6. How the player works
 
-- The player loads only `https://cork7.com/` by default.
-- Any optional `goto` value is accepted only for `https://cork7.com`, `https://www.cork7.com`, or `https://live.cork7.com`.
+- The player loads `https://cork7.com/` by default.
+- Vercel's `/ss` route passes the fixed `site=saltyseas` selector, which changes the initial target to `https://saltyseas.io/app/`.
+- The target URL is validated against the exact allowlist before it is injected into the player.
 - Scramjet's service worker is scoped to `/c7/`; its internal virtual URL prefix and script paths are also under `/c7/`.
-- Wisp permits only the exact destination hosts listed in `CORK7_ALLOWED_HOSTS` and ports 80/443.
-- The Supabase account/API destination is restricted to the exact host `agfhgulgtsocvioqqxvi.supabase.co`; other Supabase projects remain blocked.
+- Wisp permits only the exact destination hosts listed in `CORK7_ALLOWED_HOSTS` and ports 80/443, including `saltyseas.io`.
+- Cork7's account/API destination is restricted to the exact host `agfhgulgtsocvioqqxvi.supabase.co`; other Supabase projects remain blocked.
 - Direct-IP, private-network, loopback and UDP destinations are disabled.
 - The player opens its Wisp WebSocket connection when the game starts. Confirm multiplayer by joining the same live room from two separate player sessions.
 
@@ -73,4 +74,4 @@ A successful health check confirms the HTTP server is running. A successful WSS 
 - **Health works but `/c7/` returns 404:** check that the Docker build completed the Vite player build and copied `packages/demo/dist`.
 - **Player assets fail:** check the Vercel `/c7/:path*` external rewrite and confirm the destination includes `/c7/:path*`.
 - **WebSocket indicator fails:** confirm the public hostname and `ALLOWED_ORIGINS` match the current deployment and Vercel domain.
-- **Some game functionality is unavailable:** check the blocked hostname from the game's own network diagnostics, verify it belongs to Cork7, then add only that exact hostname.
+- **A proxied site's assets do not load:** the Wisp allowlist is intentionally exact. Verify any additional required hostname with the site owner before allowing that exact host; do not add wildcard access.

@@ -1,20 +1,42 @@
 import { css, type Component } from "dreamland/core";
 import BrowserView from "./pages/BrowserView";
 
+function getSiteMode() {
+	const runtimeConfig = (window as typeof window & {
+		CORK7_CONFIG?: { targetUrl?: unknown };
+	}).CORK7_CONFIG;
+	try {
+		if (typeof runtimeConfig?.targetUrl === "string") {
+			return new URL(runtimeConfig.targetUrl).hostname.toLowerCase() === "saltyseas.io"
+				? "pirate"
+				: "alpine";
+		}
+	} catch {
+		// BrowserView handles invalid target configuration safely.
+	}
+	return "alpine";
+}
+
 const App: Component = function () {
+	const isPirate = getSiteMode() === "pirate";
+	const isEmbedded = window.self !== window.top;
+	document.title = isPirate ? "Saltyseas | Pirate Waters" : "Cork7 | Alpine Run";
+
 	return (
-		<main class="player-shell">
-			<header class="topbar">
-				<div class="brand">
-					<div class="brand-mark" aria-hidden="true">C7</div>
-					<div class="brand-copy">
-						<div class="brand-title">CORK7</div>
-						<div class="brand-subtitle">GAME PLAYER</div>
+		<main class={"player-shell " + (isPirate ? "theme-pirate" : "theme-alpine") + (isEmbedded ? " is-embedded" : "")}>
+			{!isEmbedded ? (
+				<header class="topbar">
+					<div class="brand">
+						<div class="brand-mark" aria-hidden="true">{isPirate ? "☠" : "C7"}</div>
+						<div class="brand-copy">
+							<div class="brand-title">{isPirate ? "SALTYSEAS" : "CORK7"}</div>
+							<div class="brand-subtitle">{isPirate ? "PIRATE WATERS · PLAYER" : "ALPINE RUN · PLAYER"}</div>
+						</div>
 					</div>
-				</div>
-				<div class="topbar-note">OFFICIAL GAME SESSION</div>
-			</header>
-			<section class="player-content" aria-label="Cork7 game player">
+					<div class="topbar-note">{isPirate ? "OPEN WATERS SESSION" : "MOUNTAIN SESSION"}</div>
+				</header>
+			) : null}
+			<section class="player-content" aria-label={isPirate ? "Saltyseas player" : "Cork7 player"}>
 				<BrowserView />
 			</section>
 		</main>
@@ -23,6 +45,9 @@ const App: Component = function () {
 
 App.style = css`
 	:scope {
+		--accent: #a9e7f7;
+		--accent-soft: rgba(100, 196, 224, .18);
+		--line: rgba(168, 218, 232, .15);
 		position: fixed;
 		inset: 0;
 		display: flex;
@@ -33,11 +58,15 @@ App.style = css`
 		min-height: 0;
 		overflow: hidden;
 		box-sizing: border-box;
-		background:
-			radial-gradient(1000px 520px at 50% -280px, rgba(56, 112, 112, .18), transparent 70%),
-			#080b10;
-		color: #edf3f7;
+		background: radial-gradient(900px 420px at 50% -260px, rgba(66, 145, 183, .22), transparent 72%), #07111b;
+		color: #edf5fa;
 		font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	}
+	:scope.theme-pirate {
+		--accent: #f1c77b;
+		--accent-soft: rgba(241, 199, 123, .16);
+		--line: rgba(241, 199, 123, .17);
+		background: radial-gradient(900px 420px at 50% -260px, rgba(29, 112, 125, .28), transparent 72%), #07151b;
 	}
 	.topbar {
 		position: relative;
@@ -48,60 +77,31 @@ App.style = css`
 		justify-content: space-between;
 		gap: 16px;
 		padding: 0 clamp(16px, 2.2vw, 30px);
-		border-bottom: 1px solid rgba(126, 153, 174, .13);
-		background: rgba(9, 14, 21, .94);
+		border-bottom: 1px solid var(--line);
+		background: rgba(7, 15, 23, .94);
 	}
-	.brand {
-		display: flex;
-		align-items: center;
-		gap: 11px;
-		min-width: 0;
-	}
+	.theme-pirate .topbar { background: rgba(6, 20, 25, .94); }
+	.brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
 	.brand-mark {
 		display: grid;
 		width: 36px;
 		height: 36px;
 		flex: 0 0 36px;
 		place-items: center;
-		border: 1px solid rgba(151, 215, 203, .48);
-		border-radius: 10px;
-		background: linear-gradient(145deg, rgba(121, 191, 178, .16), rgba(27, 47, 57, .38));
-		color: #b6e7dc;
+		border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+		border-radius: 11px;
+		background: linear-gradient(145deg, var(--accent-soft), rgba(27, 47, 57, .38));
+		color: var(--accent);
 		font-size: 14px;
-		font-weight: 850;
-		letter-spacing: -.08em;
+		font-weight: 900;
 		box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 4px 16px rgba(0, 0, 0, .18);
 	}
 	.brand-copy { min-width: 0; }
-	.brand-title {
-		color: #f2f6f8;
-		font-size: 12px;
-		font-weight: 850;
-		letter-spacing: .2em;
-		line-height: 1.1;
-	}
-	.brand-subtitle {
-		margin-top: 4px;
-		color: #8395a5;
-		font-size: 8px;
-		font-weight: 750;
-		letter-spacing: .18em;
-		line-height: 1;
-	}
-	.topbar-note {
-		color: #637584;
-		font-size: 9px;
-		font-weight: 750;
-		letter-spacing: .16em;
-		white-space: nowrap;
-	}
-	.player-content {
-		display: flex;
-		flex: 1 1 auto;
-		min-width: 0;
-		min-height: 0;
-		padding: 12px clamp(12px, 1.8vw, 24px) 14px;
-	}
+	.brand-title { color: #f2f6f8; font-size: 12px; font-weight: 900; letter-spacing: .2em; line-height: 1.1; }
+	.brand-subtitle { margin-top: 4px; color: #91a7b5; font-size: 8px; font-weight: 750; letter-spacing: .16em; line-height: 1; }
+	.topbar-note { color: var(--accent); font-size: 9px; font-weight: 800; letter-spacing: .16em; white-space: nowrap; }
+	.player-content { display: flex; flex: 1 1 auto; min-width: 0; min-height: 0; padding: 12px clamp(12px, 1.8vw, 24px) 14px; }
+	:scope.is-embedded .player-content { padding: 0; }
 	@media (max-width: 600px) {
 		.topbar { flex-basis: 56px; padding: 0 14px; }
 		.brand-mark { width: 32px; height: 32px; flex-basis: 32px; border-radius: 9px; }

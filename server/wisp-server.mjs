@@ -17,6 +17,8 @@ const PLAYER_INDEX = path.join(STATIC_ROOT, "index.html");
 const DEFAULT_ALLOWED_HOSTS = "cork7.com,www.cork7.com,live.cork7.com,agfhgulgtsocvioqqxvi.supabase.co";
 const DEFAULT_ALLOWED_ORIGINS = "https://cork7game.vercel.app";
 const SUPABASE_API_HOST = "agfhgulgtsocvioqqxvi.supabase.co";
+const SALTYSEAS_TARGET_URL = "https://saltyseas.io/app/";
+const SALTYSEAS_HOST = "saltyseas.io";
 
 const MIME_TYPES = {
 	".html": "text/html; charset=utf-8",
@@ -241,7 +243,7 @@ async function inspectPlayerBuild() {
 	}
 }
 
-async function servePlayerAsset(pathname, request, response) {
+async function servePlayerAsset(pathname, request, response, pageTargetUrl) {
 	let relativePath;
 	try {
 		relativePath = decodeURIComponent(pathname.slice(PLAYER_PATH.length + 1));
@@ -292,7 +294,7 @@ async function servePlayerAsset(pathname, request, response) {
 			? Buffer.from(
 				injectRuntimeConfig(
 					await fs.readFile(filePath, "utf8"),
-					targetUrl,
+					pageTargetUrl,
 					allowedHosts,
 				),
 				"utf8",
@@ -341,6 +343,7 @@ const allowedHosts = [
 			process.env.CORK7_ALLOWED_HOSTS ?? DEFAULT_ALLOWED_HOSTS,
 		),
 		SUPABASE_API_HOST,
+		SALTYSEAS_HOST,
 	]),
 ];
 const allowedOrigins = parseAllowedOrigins(
@@ -380,7 +383,7 @@ wisp.ServerConnection.prototype.create_stream = function (...args) {
 	return originalCreateWispStream.apply(this, args);
 };
 
-// Keep Wisp restricted to the exact Cork7 hosts and standard web ports.
+// Keep Wisp restricted to the exact approved destination hosts and standard web ports.
 wisp.options.hostname_whitelist = allowedHosts.map(
 	(host) => new RegExp("^" + host.replaceAll(".", "\\.") + "$", "i"),
 );
@@ -442,7 +445,11 @@ const server = http.createServer(async (request, response) => {
 		request.method === "GET" &&
 		(pathname === PLAYER_PATH + "/" || pathname.startsWith(PLAYER_PATH + "/"))
 	) {
-		void servePlayerAsset(pathname, request, response);
+		const requestedSite = new URL(request.url ?? "/", "http://localhost").searchParams.get("site");
+		const pageTargetUrl = requestedSite === "saltyseas"
+			? parseTargetUrl(SALTYSEAS_TARGET_URL, allowedHosts)
+			: targetUrl;
+		void servePlayerAsset(pathname, request, response, pageTargetUrl);
 		return;
 	}
 

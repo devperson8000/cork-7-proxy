@@ -41,7 +41,14 @@ const App: Component = function () {
 							<div class="brand-subtitle">{isPirate ? "PIRATE WATERS · PLAYER" : isChess ? "ONLINE CHESS · PLAYER" : "ALPINE RUN · PLAYER"}</div>
 						</div>
 					</div>
+					<div class="topbar-actions">
+					<nav class="game-switcher" aria-label="Choose a game">
+						<a href="/c7" aria-current={siteMode === "alpine" ? "page" : undefined}>⛷ Cork7</a>
+						<a href="/ss" aria-current={isPirate ? "page" : undefined}>☠ SaltySeas</a>
+						<a href="/chess" aria-current={isChess ? "page" : undefined}>♞ Chess.com</a>
+					</nav>
 					<div class="topbar-note">{isPirate ? "OPEN WATERS SESSION" : isChess ? "CHESS SESSION" : "MOUNTAIN SESSION"}</div>
+				</div>
 				</header>
 			) : null}
 			<section class="player-content" aria-label={isPirate ? "Saltyseas player" : isChess ? "Chess.com player" : "Cork7 player"}>
@@ -113,13 +120,36 @@ App.style = css`
 	.brand-copy { min-width: 0; }
 	.brand-title { color: #f2f6f8; font-size: 12px; font-weight: 900; letter-spacing: .2em; line-height: 1.1; }
 	.brand-subtitle { margin-top: 4px; color: #91a7b5; font-size: 8px; font-weight: 750; letter-spacing: .16em; line-height: 1; }
+	.topbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; min-width: 0; }
+	.game-switcher { display: flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255, 255, 255, .025); }
+	.game-switcher a {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 32px;
+		padding: 0 10px;
+		border: 1px solid transparent;
+		border-radius: 7px;
+		color: #a9bac4;
+		text-decoration: none;
+		font-size: 9px;
+		font-weight: 850;
+		letter-spacing: .04em;
+		white-space: nowrap;
+		transition: background .16s ease, color .16s ease, border-color .16s ease;
+	}
+	.game-switcher a:hover, .game-switcher a:focus-visible { color: #f5fbff; border-color: var(--line); outline: none; }
+	.game-switcher a[aria-current="page"] { background: var(--accent-soft); border-color: var(--line); color: var(--accent); }
 	.topbar-note { color: var(--accent); font-size: 9px; font-weight: 800; letter-spacing: .16em; white-space: nowrap; }
 	.player-content { display: flex; flex: 1 1 auto; min-width: 0; min-height: 0; padding: 12px clamp(12px, 1.8vw, 24px) 14px; }
 	:scope.is-embedded .player-content { padding: 0; }
 	@media (max-width: 600px) {
-		.topbar { flex-basis: 56px; padding: 0 14px; }
+		.topbar { flex: 0 0 auto; min-height: 94px; align-items: stretch; flex-direction: column; justify-content: center; gap: 8px; padding: 8px 12px; }
 		.brand-mark { width: 32px; height: 32px; flex-basis: 32px; border-radius: 9px; }
-		.topbar-note { font-size: 8px; letter-spacing: .1em; }
+		.topbar-actions { width: 100%; justify-content: space-between; gap: 8px; }
+		.game-switcher { flex: 1 1 auto; justify-content: space-between; min-width: 0; }
+		.game-switcher a { flex: 1 1 0; min-width: 0; padding: 0 5px; font-size: 8px; letter-spacing: 0; }
+		.topbar-note { display: none; }
 		.player-content { padding: 8px; }
 	}
 	@media (prefers-reduced-motion: reduce) {

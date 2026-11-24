@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#091a14">
+<meta name="referrer" content="no-referrer">
+<link rel="preconnect" href="https://p01--cork7--yf5q7tyyggsr.code.run" crossorigin>
+<link rel="dns-prefetch" href="//p01--cork7--yf5q7tyyggsr.code.run">
+<title>Chess.com | Online Chess</title>
+<style>
+:root{color-scheme:dark;--bg:#091a14;--line:rgba(181,230,189,.17);--muted:#9ab2a1;--text:#f0f8f1;--accent:#b5e6bd}
+*{box-sizing:border-box}
+html,body{width:100%;height:100%;margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+body{display:flex;flex-direction:column;overflow:hidden;background:radial-gradient(ellipse at 82% -18%,rgba(69,143,91,.24),transparent 42%),linear-gradient(150deg,#091a14,#091925 55%,#07111a)}
+.topbar{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:20px;min-height:76px;padding:11px clamp(16px,3vw,42px);border-bottom:1px solid var(--line);background:rgba(6,14,23,.86);backdrop-filter:blur(18px)}
+.brand{display:flex;align-items:center;gap:13px;min-width:0}
+.brand-mark{width:44px;height:44px;display:grid;place-items:center;flex:none;border:1px solid rgba(181,230,189,.38);border-radius:14px;background:linear-gradient(145deg,rgba(126,196,139,.23),rgba(20,48,67,.5));color:var(--accent);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 7px 24px rgba(0,0,0,.25)}
+.brand-copy{min-width:0}.eyebrow{margin:0 0 3px;color:#9bc4a2;font-size:8px;font-weight:850;letter-spacing:.24em}
+.brand-title{font-size:14px;font-weight:950;letter-spacing:.18em;line-height:1}.brand-sub{margin-top:5px;color:#8ca4b3;font-size:9px;font-weight:650;letter-spacing:.12em}
+.header-right{display:flex;align-items:center;justify-content:flex-end;gap:12px}
+.nav{display:flex;align-items:center;gap:5px;padding:4px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.025)}
+.nav a,.open-link{display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:0 13px;border:1px solid transparent;border-radius:8px;color:#a8bac6;text-decoration:none;font-size:11px;font-weight:800;white-space:nowrap;transition:background .18s ease,color .18s ease,border-color .18s ease}
+.nav a:hover,.open-link:hover{color:#f5fbff;border-color:rgba(181,230,189,.25)}
+.nav a[aria-current=page]{background:rgba(181,230,189,.13);border-color:rgba(181,230,189,.25);color:var(--accent)}
+.open-link{border-color:var(--line);background:rgba(255,255,255,.035);color:#d3e3eb}
+main{display:flex;flex:1;flex-direction:column;min-height:0;padding:clamp(12px,2vw,24px) clamp(12px,3vw,42px) clamp(12px,2vw,24px);gap:13px}
+.intro{position:relative;display:flex;align-items:center;justify-content:space-between;gap:20px;min-height:82px;padding:2px 5px;overflow:hidden}
+.intro:after{content:"";position:absolute;right:2%;bottom:-58px;width:38%;height:150px;background:linear-gradient(180deg,rgba(181,230,189,.12),rgba(69,143,91,.025));clip-path:polygon(0 100%,18% 44%,27% 63%,43% 15%,57% 62%,67% 38%,82% 72%,93% 54%,100% 100%);pointer-events:none}
+.intro-copy{position:relative;z-index:1}.kicker{display:flex;align-items:center;gap:8px;margin:0 0 7px;color:var(--accent);font-size:8px;font-weight:900;letter-spacing:.22em}
+.kicker:before{content:"";width:17px;height:1px;background:var(--accent)}
+h1{margin:0;color:#f3f8fb;font-size:clamp(21px,3vw,33px);font-weight:900;letter-spacing:-.045em;line-height:1.05}
+.intro p:last-child{margin:7px 0 0;color:#92a9b6;font-size:11px;letter-spacing:.015em}
+.elevation{position:relative;z-index:1;display:flex;align-items:center;gap:10px;padding:10px 13px;border:1px solid var(--line);border-radius:12px;background:rgba(13,29,43,.66);color:#b8cbd5;font-size:9px;font-weight:850;letter-spacing:.14em;white-space:nowrap}
+.elevation svg{width:22px;height:22px;stroke:var(--accent);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.game-card{position:relative;display:flex;flex:1;flex-direction:column;min-height:0;overflow:hidden;border:1px solid rgba(181,230,189,.19);border-radius:17px;background:#03080d;box-shadow:0 24px 80px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.04)}
+.game-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:38px;padding:0 14px;border-bottom:1px solid rgba(181,230,189,.12);background:linear-gradient(90deg,rgba(14,37,53,.98),rgba(9,23,35,.96));color:#a1b9c6;font-size:8px;font-weight:850;letter-spacing:.17em}
+.game-bar span{display:inline-flex;align-items:center;gap:7px}.signal{width:6px;height:6px;border-radius:50%;background:#87e0c0;box-shadow:0 0 12px rgba(135,224,192,.75)}
+.stage{position:relative;flex:1;min-height:0;background:#02070b}iframe{display:block;width:100%;height:100%;border:0;background:#02070b}
+.status{position:absolute;left:13px;bottom:13px;z-index:1;display:inline-flex;align-items:center;gap:8px;padding:8px 11px;border:1px solid rgba(181,230,189,.16);border-radius:9px;background:rgba(4,13,21,.78);backdrop-filter:blur(12px);color:#a9bdc8;font-size:9px;font-weight:800;letter-spacing:.1em;pointer-events:none}
+.status-mark{color:var(--accent)}
+@media(max-width:760px){.topbar{min-height:68px;align-items:flex-start;flex-direction:column;gap:10px}.header-right{width:100%;justify-content:space-between;flex-wrap:wrap}.nav{flex:1}.nav a{flex:1}.open-link{padding:0 9px}.intro{min-height:74px}.elevation{display:none}}
+@media(max-width:480px){.brand-mark{width:39px;height:39px}.brand-title{font-size:12px}.brand-sub{font-size:8px}.nav a,.open-link{font-size:10px}.game-bar{font-size:7px;letter-spacing:.1em;padding:0 9px}.status{left:8px;bottom:8px;font-size:8px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true" style="font-size:25px">♞</div>
+    <div class="brand-copy"><p class="eyebrow">THE BOARD IS YOURS</p><div class="brand-title">CHESS.COM</div><div class="brand-sub">PLAY ONLINE · EVERY MOVE MATTERS</div></div>
+  </div>
+  <div class="header-right">
+    <nav class="nav" aria-label="Choose a game">
+      <a href="/c7">⛷ Cork7</a>
+      <a href="/ss">☠ SaltySeas</a>
+      <a href="/chess" aria-current="page">♞ Chess.com</a>
+    </nav>
+    <a class="open-link" href="/chess-player" target="_blank" rel="noopener noreferrer">Open player ↗</a>
+  </div>
+</header>
+<main>
+  <section class="intro">
+    <div class="intro-copy">
+      <p class="kicker">03 / CHESS SESSION</p>
+      <h1>Think three moves ahead.</h1>
+      <p>Play friends, sharpen your strategy, and make your next move.</p>
+    </div>
+    <div class="elevation"><span style="font-size:22px;color:var(--accent)">♞</span><span>CHESS MODE · CHESS.COM</span></div>
+  </section>
+  <section class="game-card" aria-label="Chess.com online chess">
+    <div class="game-bar"><span><i class="signal"></i> CHESS SESSION</span><span>PROXY PLAYER · FULLSCREEN READY</span></div>
+    <div class="stage">
+      <iframe id="siteFrame" title="Chess.com online chess" src="/chess-player" fetchpriority="high" allow="autoplay; fullscreen; gamepad; clipboard-read; clipboard-write" allowfullscreen referrerpolicy="no-referrer"></iframe>
+      <div class="status"><span class="status-mark">◆</span> ONLINE CHESS · PROXY SESSION</div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

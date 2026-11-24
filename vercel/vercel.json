@@ -3,15 +3,19 @@
   "rewrites": [
     {
       "source": "/chess",
-      "destination": "https://p01--cork7--yf5q7tyyggsr.code.run/chess-player/"
+      "destination": "/chess.html"
     },
     {
-      "source": "/chess/:path*",
+      "source": "/chess/:path+",
       "destination": "https://p01--cork7--yf5q7tyyggsr.code.run/chess-player/:path*"
     },
     {
       "source": "/ss-player",
       "destination": "https://p01--cork7--yf5q7tyyggsr.code.run/saltyseas-player/"
+    },
+    {
+      "source": "/chess-player",
+      "destination": "https://p01--cork7--yf5q7tyyggsr.code.run/chess-player/"
     },
     {
       "source": "/ss",
@@ -30,7 +34,7 @@
       "destination": "https://p01--cork7--yf5q7tyyggsr.code.run/c7/:path*"
     },
     {
-      "source": "/c7/:path*",
+      "source": "/c7/:path+",
       "destination": "https://p01--cork7--yf5q7tyyggsr.code.run/c7/:path*"
     }
   ]

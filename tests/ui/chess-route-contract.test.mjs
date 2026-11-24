@@ -20,7 +20,7 @@ assert.match(server, /const CHESS_PLAYER_PATH = "\/chess-player"/, "Northflank m
 assert.match(server, /const CHESS_TARGET_URL = "https:\/\/www\.chess\.com\/"/, "Chess alias must open Chess.com");
 assert.match(server, /isChessPlayerPath/, "Northflank must recognise the Chess player path");
 assert.match(server, /CHESS_PLAYER_PATH \+ pathname\.slice\(CHESS_PLAYER_PATH\.length\)/, "Chess alias must reuse the shared player assets");
-assert.match(server, /hostname\.toLowerCase\(\) === CHESS_WWW_HOST \? "chess"/, "runtime config must identify Chess.com mode");
+assert.match(server, /hostname\.toLowerCase\(\) === CHESS_WWW_HOST\s*\? "chess"/, "runtime config must identify Chess.com mode");
 assert.match(app, /runtimeConfig\?\.site === "chess"/, "player header must support Chess mode");
 assert.match(app, /theme-chess/, "player must have a Chess theme");
 assert.match(env, /CORK7_ALLOWED_HOSTS=.*www\.chess\.com/, "Northflank example must include exact Chess.com hosts");

@@ -640,25 +640,37 @@
     }
     .card-action {
       display: inline-flex;
+      flex: 0 0 auto;
       align-items: center;
-      gap: 18px;
+      justify-content: space-between;
+      flex-wrap: nowrap;
+      gap: clamp(8px, 1vw, 13px);
+      width: fit-content;
+      max-width: 100%;
       min-height: 49px;
       margin-top: 23px;
-      padding: 0 10px 0 17px;
+      padding: 0 9px 0 15px;
       border: 1px solid rgba(255,255,255,.48);
       border-radius: 12px;
       background: rgba(247, 252, 255, .96);
       box-shadow: 0 12px 28px rgba(0, 18, 30, .2), inset 0 1px 0 rgba(255,255,255,.9);
       color: #103246;
-      transition: transform 220ms ease, background 220ms ease, box-shadow 220ms ease;
+      white-space: nowrap;
+      transition: transform 220ms ease, background 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
     }
     .action-copy {
+      display: block;
+      flex: 0 0 auto;
+      min-width: max-content;
+      white-space: nowrap;
       font-size: 10px;
       font-weight: 950;
-      letter-spacing: .16em;
+      letter-spacing: .1em;
+      line-height: 1;
     }
     .action-key {
       display: inline-grid;
+      flex: 0 0 22px;
       min-width: 22px;
       height: 25px;
       place-items: center;
@@ -671,6 +683,7 @@
     }
     .action-arrow {
       display: grid;
+      flex: 0 0 29px;
       width: 29px;
       height: 29px;
       place-items: center;
@@ -688,7 +701,8 @@
     }
     .world-card--sea .action-key { border-color: rgba(63,53,32,.18); color: #665235; }
     .world-card--sea .action-arrow { background: #e4c98f; color: #26414a; }
-    .world-card:hover .card-action { transform: translateY(-2px); box-shadow: 0 16px 35px rgba(0,18,30,.29); }
+    .world-card:hover .card-action { transform: translateY(-2px); box-shadow: 0 16px 35px rgba(0,18,30,.29); border-color: rgba(255,255,255,.72); }
+    .world-card:focus-visible .card-action { box-shadow: 0 0 0 3px rgba(255,255,255,.18), 0 12px 28px rgba(0,18,30,.24); }
     .world-card:hover .action-arrow { transform: translate(2px,-2px); background: #d1eff8; }
     .world-card--sea:hover .action-arrow { background: #fff0ce; }
 
@@ -793,7 +807,8 @@
       .world-card--sea .card-title { font-size: clamp(39px, 6.8vw, 65px); }
       .world-card--chess .card-title { font-size: clamp(54px, 7vw, 74px); }
       .card-description { max-width: 300px; }
-      .card-action { gap: 12px; }
+      .card-action { gap: 9px; padding-right: 8px; padding-left: 12px; }
+      .action-copy { font-size: 9px; letter-spacing: .08em; }
     }
     @media (max-width: 700px) {
       body { overflow-y: auto; }
@@ -843,8 +858,8 @@
       .world-card--sea .card-title { font-size: 48px; }
       .world-card--chess .card-title { font-size: 46px; }
       .card-description { font-size: 12px; }
-      .card-action { min-height: 45px; margin-top: 19px; padding-left: 12px; gap: 9px; }
-      .action-copy { font-size: 9px; }
+      .card-action { min-height: 45px; margin-top: 19px; padding: 0 7px 0 11px; gap: 7px; }
+      .action-copy { font-size: 9px; letter-spacing: .07em; }
       .card-foot { font-size: 7px; letter-spacing: .1em; }
       .card-foot-right { font-size: 7px; }
     }

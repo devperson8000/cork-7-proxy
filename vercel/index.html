@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#071521">
   <meta name="color-scheme" content="dark">
-  <meta name="description" content="Choose your next adventure: race the mountain in Cork7 or set sail in SaltySeas.">
-  <title>Choose Your World | Cork7 + SaltySeas</title>
+  <meta name="description" content="Choose your next adventure: race the mountain in Cork7, set sail in SaltySeas, or play chess online.">
+  <title>Choose Your World | Cork7 + SaltySeas + Chess.com</title>
   <style>
     :root {
       color-scheme: dark;
@@ -202,7 +202,7 @@
 
     .world-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: clamp(13px, 1.7vw, 23px);
       min-height: 0;
     }
@@ -274,6 +274,47 @@
         radial-gradient(ellipse at 28% 58%, rgba(37, 157, 157, .22), transparent 35%),
         linear-gradient(148deg, #081a2a 0%, #0b394b 47%, #0d6870 100%);
     }
+    .world-card--chess {
+      border-color: rgba(173, 220, 180, .28);
+      background:
+        radial-gradient(ellipse at 72% 18%, rgba(180, 231, 185, .2), transparent 30%),
+        radial-gradient(ellipse at 20% 68%, rgba(73, 142, 100, .18), transparent 36%),
+        linear-gradient(148deg, #10251f 0%, #174438 52%, #28634d 100%);
+    }
+    .world-card--chess .world-status {
+      border-color: rgba(191, 232, 191, .34);
+      color: #e1f1df;
+      background: rgba(7, 24, 20, .32);
+    }
+    .world-card--chess .world-status i {
+      background: #b5edbf;
+      box-shadow: 0 0 9px rgba(181, 237, 191, .72);
+    }
+    .world-card--chess .card-kicker { color: #d5f0d8; }
+    .world-card--chess .card-title {
+      font-size: clamp(43px, 5.2vw, 76px);
+      letter-spacing: -.075em;
+    }
+    .world-card--chess .card-title span { color: #c1edc7; }
+    .world-card--chess .card-action {
+      border-color: rgba(212, 242, 215, .72);
+      background: #e4f3e5;
+      color: #193d2d;
+    }
+    .world-card--chess .action-key {
+      border-color: rgba(34, 77, 52, .18);
+      background: rgba(34, 77, 52, .06);
+      color: #42634d;
+    }
+    .world-card--chess .action-arrow {
+      background: #cde8d0;
+      color: #244a35;
+    }
+    .world-card--chess .card-foot {
+      border-color: rgba(218, 244, 220, .25);
+      color: rgba(239, 250, 239, .84);
+    }
+    .world-card--chess .card-foot-right { color: rgba(226, 246, 226, .72); }
 
     .artwork {
       position: absolute;
@@ -432,6 +473,41 @@
         linear-gradient(180deg, #14717a 0%, #0a495b 44%, #061d2d 100%);
       box-shadow: inset 0 12px 35px rgba(96,196,185,.13);
       transform: rotate(2deg);
+    }
+    .chess-board {
+      position: absolute;
+      right: -7%;
+      bottom: -1%;
+      width: 72%;
+      height: 58%;
+      border: 1px solid rgba(224, 246, 225, .28);
+      border-radius: 12px;
+      background: conic-gradient(#d7ead8 25%, #244c3b 0 50%, #d7ead8 0 75%, #244c3b 0) 0 0 / 46px 46px;
+      box-shadow: 0 18px 45px rgba(0, 10, 8, .35), inset 0 0 30px rgba(255,255,255,.1);
+      opacity: .22;
+      transform: perspective(800px) rotateX(58deg) rotateZ(-19deg);
+      transform-origin: center bottom;
+    }
+    .chess-glow {
+      position: absolute;
+      top: 9%;
+      right: 10%;
+      width: 43%;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(199, 241, 202, .22), rgba(145, 213, 159, .07) 48%, transparent 72%);
+      filter: blur(3px);
+    }
+    .chess-knight {
+      position: absolute;
+      top: 11%;
+      right: 14%;
+      color: #e4f1e2;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: clamp(145px, 17vw, 245px);
+      line-height: 1;
+      text-shadow: 0 14px 34px rgba(0, 15, 10, .34), 0 0 30px rgba(201, 241, 205, .12);
+      transform: rotate(5deg);
     }
     .moon-path {
       position: absolute;
@@ -704,11 +780,18 @@
       50% { transform: translateY(-8px) rotate(1deg); }
     }
 
+    @media (max-width: 1050px) and (min-width: 701px) {
+      .world-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .world-card--chess { grid-column: 1 / -1; min-height: 360px; }
+      .world-card--chess .card-content { padding-top: 42px; }
+      .world-card--chess .chess-knight { top: 0; right: 11%; font-size: 235px; }
+    }
     @media (max-width: 900px) {
       .launcher { padding-right: 22px; padding-left: 22px; }
       .card-head, .card-content, .card-foot { margin-right: 21px; margin-left: 21px; }
       .card-title { font-size: clamp(49px, 8.2vw, 76px); }
       .world-card--sea .card-title { font-size: clamp(39px, 6.8vw, 65px); }
+      .world-card--chess .card-title { font-size: clamp(54px, 7vw, 74px); }
       .card-description { max-width: 300px; }
       .card-action { gap: 12px; }
     }
@@ -727,6 +810,10 @@
       h1 { font-size: clamp(31px, 7.5vw, 43px); }
       .step-indicator { display: none; }
       .world-grid { grid-template-columns: 1fr; gap: 14px; }
+      .world-card--chess { grid-column: auto; }
+      .world-card--chess .card-content { padding-top: 105px; }
+      .world-card--chess .chess-board { width: 78%; right: -15%; }
+      .world-card--chess .chess-knight { top: 18%; right: 8%; font-size: clamp(150px, 42vw, 215px); }
       .world-card { min-height: 450px; border-radius: 22px; }
       .card-head, .card-content, .card-foot { margin-right: 22px; margin-left: 22px; }
       .card-head { margin-top: 21px; }
@@ -754,6 +841,7 @@
       .card-content { padding-top: 88px; }
       .card-title { font-size: 59px; }
       .world-card--sea .card-title { font-size: 48px; }
+      .world-card--chess .card-title { font-size: 46px; }
       .card-description { font-size: 12px; }
       .card-action { min-height: 45px; margin-top: 19px; padding-left: 12px; gap: 9px; }
       .action-copy { font-size: 9px; }
@@ -791,17 +879,17 @@
           <span class="brand-name">CORK7 WORLDS</span>
         </span>
       </a>
-      <div class="masthead-meta"><i class="meta-orbit" aria-hidden="true"></i> 2 WORLDS · 1 LAUNCHPAD</div>
+      <div class="masthead-meta"><i class="meta-orbit" aria-hidden="true"></i> 3 WORLDS · 1 LAUNCHPAD</div>
     </header>
 
     <section class="intro" aria-labelledby="page-title">
       <div class="intro-copy">
         <p class="eyebrow">WORLD SELECTION</p>
         <h1 id="page-title">Pick your next world.</h1>
-        <p class="intro-description">Two different adventures. One click to drop in.</p>
+        <p class="intro-description">Three different adventures. One click to drop in.</p>
       </div>
       <div class="step-indicator" aria-hidden="true">
-        <span class="step-numbers">01<span style="color:#687f8d"> / </span>02</span>
+        <span class="step-numbers">01<span style="color:#687f8d"> / </span>03</span>
         <span class="step-label"><span>CHOOSE A PORTAL</span><span>YOUR SESSION STARTS HERE</span></span>
       </div>
     </section>
@@ -880,6 +968,32 @@
           <span class="card-foot-right">PIRATE MODE</span>
         </div>
       </a>
+
+      <a class="world-card world-card--chess" href="/chess" data-launch-key="3" aria-label="Open Chess.com. Press 3 to launch.">
+        <div class="artwork" aria-hidden="true">
+          <span class="chess-glow"></span>
+          <span class="chess-board"></span>
+          <span class="chess-knight">♞</span>
+        </div>
+        <div class="card-head">
+          <span class="world-label"><b>03</b> / THE STRATEGY BOARD</span>
+          <span class="world-status"><i></i> NEW WORLD</span>
+        </div>
+        <div class="card-content">
+          <p class="card-kicker">THINK AHEAD</p>
+          <h2 class="card-title">CHESS<span>.COM</span></h2>
+          <p class="card-description">Find your next match. Practice, play, and explore the world of chess.</p>
+          <span class="card-action">
+            <span class="action-copy">OPEN CHESS.COM</span>
+            <span class="action-key" aria-hidden="true">3</span>
+            <span class="action-arrow" aria-hidden="true">↗</span>
+          </span>
+        </div>
+        <div class="card-foot">
+          <span>THINK · PLAN · PLAY</span>
+          <span class="card-foot-right">CHESS MODE</span>
+        </div>
+      </a>
     </section>
 
     <footer class="footer-bar">
@@ -887,6 +1001,7 @@
       <span class="keyboard-hint" aria-label="Keyboard shortcuts">
         <span class="key-hint"><kbd>1</kbd> CORK7</span>
         <span class="key-hint"><kbd>2</kbd> SALTYSEAS</span>
+        <span class="key-hint"><kbd>3</kbd> CHESS.COM</span>
         <span class="key-hint">OR SELECT A CARD</span>
       </span>
     </footer>
@@ -896,7 +1011,8 @@
     (() => {
       const launchTargets = new Map([
         ["1", document.querySelector('[data-launch-key="1"]')],
-        ["2", document.querySelector('[data-launch-key="2"]')]
+        ["2", document.querySelector('[data-launch-key="2"]')],
+        ["3", document.querySelector('[data-launch-key="3"]')]
       ]);
 
       document.addEventListener("keydown", (event) => {

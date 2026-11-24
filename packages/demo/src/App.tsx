@@ -1,17 +1,21 @@
 import { css, type Component } from "dreamland/core";
 import BrowserView from "./pages/BrowserView";
 
-function getSiteMode() {
+function getSiteMode(): "alpine" | "pirate" | "chess" {
 	const runtimeConfig = (window as typeof window & {
 		CORK7_CONFIG?: { site?: unknown; targetUrl?: unknown };
 	}).CORK7_CONFIG;
 	try {
 		if (runtimeConfig?.site === "saltyseas") return "pirate";
+		if (runtimeConfig?.site === "chess") return "chess";
 		if (runtimeConfig?.site === "cork7") return "alpine";
 		if (typeof runtimeConfig?.targetUrl === "string") {
-			return new URL(runtimeConfig.targetUrl).hostname.toLowerCase() === "saltyseas.io"
+			const hostname = new URL(runtimeConfig.targetUrl).hostname.toLowerCase();
+			return hostname === "saltyseas.io"
 				? "pirate"
-				: "alpine";
+				: hostname === "www.chess.com"
+					? "chess"
+					: "alpine";
 		}
 	} catch {
 		// BrowserView handles invalid target configuration safely.
@@ -20,25 +24,27 @@ function getSiteMode() {
 }
 
 const App: Component = function () {
-	const isPirate = getSiteMode() === "pirate";
+	const siteMode = getSiteMode();
+	const isPirate = siteMode === "pirate";
+	const isChess = siteMode === "chess";
 	const isEmbedded = window.self !== window.top;
-	document.title = isPirate ? "Saltyseas | Pirate Waters" : "Cork7 | Alpine Run";
+	document.title = isPirate ? "Saltyseas | Pirate Waters" : isChess ? "Chess.com | Player" : "Cork7 | Alpine Run";
 
 	return (
-		<main class={"player-shell " + (isPirate ? "theme-pirate" : "theme-alpine") + (isEmbedded ? " is-embedded" : "")}>
+		<main class={"player-shell " + (isPirate ? "theme-pirate" : isChess ? "theme-chess" : "theme-alpine") + (isEmbedded ? " is-embedded" : "")}>
 			{!isEmbedded ? (
 				<header class="topbar">
 					<div class="brand">
-						<div class="brand-mark" aria-hidden="true">{isPirate ? "☠" : "C7"}</div>
+						<div class="brand-mark" aria-hidden="true">{isPirate ? "☠" : isChess ? "♞" : "C7"}</div>
 						<div class="brand-copy">
-							<div class="brand-title">{isPirate ? "SALTYSEAS" : "CORK7"}</div>
-							<div class="brand-subtitle">{isPirate ? "PIRATE WATERS · PLAYER" : "ALPINE RUN · PLAYER"}</div>
+							<div class="brand-title">{isPirate ? "SALTYSEAS" : isChess ? "CHESS.COM" : "CORK7"}</div>
+							<div class="brand-subtitle">{isPirate ? "PIRATE WATERS · PLAYER" : isChess ? "ONLINE CHESS · PLAYER" : "ALPINE RUN · PLAYER"}</div>
 						</div>
 					</div>
-					<div class="topbar-note">{isPirate ? "OPEN WATERS SESSION" : "MOUNTAIN SESSION"}</div>
+					<div class="topbar-note">{isPirate ? "OPEN WATERS SESSION" : isChess ? "CHESS SESSION" : "MOUNTAIN SESSION"}</div>
 				</header>
 			) : null}
-			<section class="player-content" aria-label={isPirate ? "Saltyseas player" : "Cork7 player"}>
+			<section class="player-content" aria-label={isPirate ? "Saltyseas player" : isChess ? "Chess.com player" : "Cork7 player"}>
 				<BrowserView />
 			</section>
 		</main>
@@ -63,6 +69,12 @@ App.style = css`
 		background: radial-gradient(900px 420px at 50% -260px, rgba(66, 145, 183, .22), transparent 72%), #07111b;
 		color: #edf5fa;
 		font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	}
+	:scope.theme-chess {
+		--accent: #b5e6bd;
+		--accent-soft: rgba(126, 196, 139, .17);
+		--line: rgba(181, 230, 189, .17);
+		background: radial-gradient(900px 420px at 50% -260px, rgba(69, 143, 91, .24), transparent 72%), #091a14;
 	}
 	:scope.theme-pirate {
 		--accent: #f1c77b;

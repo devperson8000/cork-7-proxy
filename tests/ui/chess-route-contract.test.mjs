@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
-const [launcher, vercel, server, app, env, docs] = await Promise.all([
+const [launcher, vercel, server, app, browserView, env, docs] = await Promise.all([
   read("../../vercel/index.html"),
   read("../../vercel/vercel.json"),
   read("../../server/wisp-server.mjs"),
   read("../../packages/demo/src/App.tsx"),
+  read("../../packages/demo/src/pages/BrowserView.tsx"),
   read("../../.env.northflank.example"),
   read("../../NORTHFLANK.md")
 ]);

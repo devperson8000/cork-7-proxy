@@ -22,17 +22,6 @@ const SUPABASE_API_HOST = "agfhgulgtsocvioqqxvi.supabase.co";
 const SALTYSEAS_TARGET_URL = "https://saltyseas.io/app/";
 const CHESS_TARGET_URL = "https://www.chess.com/";
 const CHESS_WWW_HOST = "www.chess.com";
-const CHESS_ALLOWED_HOSTS = [
-	"chess.com",
-	CHESS_WWW_HOST,
-	"api.chess.com",
-	"live.chess.com",
-	"live2.chess.com",
-	"websockets.gcp-prod.chess.com",
-	"images.chesscomfiles.com",
-	"avatars.chesscomfiles.com",
-	"files.chesscomfiles.com",
-];
 const SALTYSEAS_HOST = "saltyseas.io";
 const SALTYSEAS_CDN_HOST = "cdn.saltyseas.io";
 const SALTYSEAS_API_EU_HOST = "api-eu-1.saltyseas.io";
@@ -544,7 +533,6 @@ const allowedHosts = [
 		GOOGLE_ACCOUNTS_HOST,
 		GOOGLE_TAG_MANAGER_HOST,
 		GOOGLE_ANALYTICS_REGION1_HOST,
-		...CHESS_ALLOWED_HOSTS,
 	]),
 ];
 const allowedOrigins = parseAllowedOrigins(
@@ -806,6 +794,14 @@ const server = http.createServer(async (request, response) => {
 		const requestedSite = new URL(request.url ?? "/", "http://localhost").searchParams.get("site");
 		const useSaltyseas = isSaltyseasPlayerPath || requestedSite === "saltyseas";
 		const useChess = isChessPlayerPath || requestedSite === "chess";
+		if (useChess && !allowedHosts.includes(CHESS_WWW_HOST)) {
+			response.writeHead(503, {
+				"Content-Type": "text/plain; charset=utf-8",
+				"Cache-Control": "no-store",
+			});
+			response.end("Chess.com is not enabled. Add www.chess.com to CORK7_ALLOWED_HOSTS in Northflank, then redeploy the service.");
+			return;
+		}
 		const pageTargetUrl = useChess
 			? parseTargetUrl(CHESS_TARGET_URL, allowedHosts)
 			: useSaltyseas

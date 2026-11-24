@@ -25,6 +25,17 @@ function getSitePresentation() {
 				frameTitle: "Saltyseas game",
 			};
 		}
+		if (runtimeConfig?.site === "chess") {
+			return {
+				name: "Chess.com",
+				mark: "♞",
+				loadingTitle: "OPENING CHESS.COM",
+				loadingDetail: "Preparing your online chess session",
+				slowDetail: "Chess.com is taking longer than expected to respond.",
+				errorDetail: "Refresh the page to reconnect to Chess.com.",
+				frameTitle: "Chess.com",
+			};
+		}
 		if (typeof runtimeConfig?.targetUrl === "string") {
 			const hostname = new URL(runtimeConfig.targetUrl).hostname.toLowerCase();
 			if (hostname === "saltyseas.io") {
@@ -36,6 +47,17 @@ function getSitePresentation() {
 					slowDetail: "Saltyseas is taking longer than expected to respond.",
 					errorDetail: "Refresh the page to reconnect to Saltyseas.",
 					frameTitle: "Saltyseas game",
+				};
+			}
+			if (hostname === "www.chess.com") {
+				return {
+					name: "Chess.com",
+					mark: "♞",
+					loadingTitle: "OPENING CHESS.COM",
+					loadingDetail: "Preparing your online chess session",
+					slowDetail: "Chess.com is taking longer than expected to respond.",
+					errorDetail: "Refresh the page to reconnect to Chess.com.",
+					frameTitle: "Chess.com",
 				};
 			}
 		}

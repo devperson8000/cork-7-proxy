@@ -10,15 +10,18 @@ const HOST = "0.0.0.0";
 const WISP_PATH = "/wisp/";
 const PLAYER_PATH = "/c7";
 const SALTYSEAS_PLAYER_PATH = "/saltyseas-player";
+const CHESS_PLAYER_PATH = "/chess-player";
 const SERVER_DIR = path.dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = path.resolve(SERVER_DIR, "..");
 const STATIC_ROOT = path.join(APP_ROOT, "packages", "demo", "dist");
 const PLAYER_INDEX = path.join(STATIC_ROOT, "index.html");
 
-const DEFAULT_ALLOWED_HOSTS = "cork7.com,www.cork7.com,live.cork7.com,agfhgulgtsocvioqqxvi.supabase.co,saltyseas.io,cdn.saltyseas.io,api-eu-1.saltyseas.io,accounts.google.com,www.googletagmanager.com,region1.google-analytics.com";
+const DEFAULT_ALLOWED_HOSTS = "cork7.com,www.cork7.com,live.cork7.com,agfhgulgtsocvioqqxvi.supabase.co,saltyseas.io,cdn.saltyseas.io,api-eu-1.saltyseas.io,accounts.google.com,www.googletagmanager.com,region1.google-analytics.com,chess.com,www.chess.com,api.chess.com,live.chess.com,live2.chess.com,websockets.gcp-prod.chess.com,images.chesscomfiles.com,avatars.chesscomfiles.com,files.chesscomfiles.com";
 const DEFAULT_ALLOWED_ORIGINS = "https://cork7game.vercel.app";
 const SUPABASE_API_HOST = "agfhgulgtsocvioqqxvi.supabase.co";
 const SALTYSEAS_TARGET_URL = "https://saltyseas.io/app/";
+const CHESS_TARGET_URL = "https://www.chess.com/";
+const CHESS_WWW_HOST = "www.chess.com";
 const SALTYSEAS_HOST = "saltyseas.io";
 const SALTYSEAS_CDN_HOST = "cdn.saltyseas.io";
 const SALTYSEAS_API_EU_HOST = "api-eu-1.saltyseas.io";
@@ -134,7 +137,11 @@ function parseTargetUrl(value, allowedHosts) {
 
 function runtimeConfigScript(targetUrl, allowedHosts) {
 	const payload = JSON.stringify({
-		site: new URL(targetUrl).hostname.toLowerCase() === SALTYSEAS_HOST ? "saltyseas" : "cork7",
+		site: new URL(targetUrl).hostname.toLowerCase() === SALTYSEAS_HOST
+			? "saltyseas"
+			: new URL(targetUrl).hostname.toLowerCase() === CHESS_WWW_HOST
+				? "chess"
+				: "cork7",
 		targetUrl,
 		allowedHosts,
 	})
@@ -759,10 +766,12 @@ const server = http.createServer(async (request, response) => {
 		return;
 	}
 
-	if (request.method === "GET" && (pathname === PLAYER_PATH || pathname === SALTYSEAS_PLAYER_PATH)) {
+	if (request.method === "GET" && (pathname === PLAYER_PATH || pathname === SALTYSEAS_PLAYER_PATH || pathname === CHESS_PLAYER_PATH)) {
 		const redirectPath = pathname === SALTYSEAS_PLAYER_PATH
 			? SALTYSEAS_PLAYER_PATH + "/"
-			: PLAYER_PATH + "/";
+			: pathname === CHESS_PLAYER_PATH
+				? CHESS_PLAYER_PATH + "/"
+				: PLAYER_PATH + "/";
 		response.writeHead(308, {
 			Location: redirectPath,
 			"Cache-Control": "no-store",
@@ -774,19 +783,35 @@ const server = http.createServer(async (request, response) => {
 	const isSaltyseasPlayerPath =
 		pathname === SALTYSEAS_PLAYER_PATH + "/" ||
 		pathname.startsWith(SALTYSEAS_PLAYER_PATH + "/");
+	const isChessPlayerPath =
+		pathname === CHESS_PLAYER_PATH + "/" ||
+		pathname.startsWith(CHESS_PLAYER_PATH + "/");
 	const isCork7PlayerPath =
 		pathname === PLAYER_PATH + "/" ||
 		pathname.startsWith(PLAYER_PATH + "/");
 
-	if (request.method === "GET" && (isCork7PlayerPath || isSaltyseasPlayerPath)) {
+	if (request.method === "GET" && (isCork7PlayerPath || isSaltyseasPlayerPath || isChessPlayerPath)) {
 		const requestedSite = new URL(request.url ?? "/", "http://localhost").searchParams.get("site");
 		const useSaltyseas = isSaltyseasPlayerPath || requestedSite === "saltyseas";
-		const pageTargetUrl = useSaltyseas
-			? parseTargetUrl(SALTYSEAS_TARGET_URL, allowedHosts)
-			: targetUrl;
+		const useChess = isChessPlayerPath || requestedSite === "chess";
+		if (useChess && !allowedHosts.includes(CHESS_WWW_HOST)) {
+			response.writeHead(503, {
+				"Content-Type": "text/plain; charset=utf-8",
+				"Cache-Control": "no-store",
+			});
+			response.end("Chess.com is not enabled. Add www.chess.com to CORK7_ALLOWED_HOSTS in Northflank, then redeploy the service.");
+			return;
+		}
+		const pageTargetUrl = useChess
+			? parseTargetUrl(CHESS_TARGET_URL, allowedHosts)
+			: useSaltyseas
+				? parseTargetUrl(SALTYSEAS_TARGET_URL, allowedHosts)
+				: targetUrl;
 		const assetPath = isSaltyseasPlayerPath
 			? PLAYER_PATH + pathname.slice(SALTYSEAS_PLAYER_PATH.length)
-			: pathname;
+			: isChessPlayerPath
+				? PLAYER_PATH + pathname.slice(CHESS_PLAYER_PATH.length)
+				: pathname;
 		void servePlayerAsset(assetPath, request, response, pageTargetUrl);
 		return;
 	}

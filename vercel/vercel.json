@@ -2,6 +2,14 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/chess",
+      "destination": "https://p01--cork7--yf5q7tyyggsr.code.run/chess-player/"
+    },
+    {
+      "source": "/chess/:path*",
+      "destination": "https://p01--cork7--yf5q7tyyggsr.code.run/chess-player/:path*"
+    },
+    {
       "source": "/ss-player",
       "destination": "https://p01--cork7--yf5q7tyyggsr.code.run/saltyseas-player/"
     },

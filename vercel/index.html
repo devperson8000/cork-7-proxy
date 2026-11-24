@@ -639,13 +639,15 @@
       text-shadow: 0 2px 13px rgba(0, 16, 26, .4);
     }
     .card-action {
-      display: inline-flex;
-      flex: 0 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 22px 29px;
       align-items: center;
-      justify-content: space-between;
+      justify-content: stretch;
+      flex: 0 1 auto;
       flex-wrap: nowrap;
-      gap: clamp(8px, 1vw, 13px);
-      width: fit-content;
+      gap: 8px;
+      width: min(100%, 280px);
+      min-width: 0;
       max-width: 100%;
       min-height: 49px;
       margin-top: 23px;
@@ -660,13 +662,14 @@
     }
     .action-copy {
       display: block;
-      flex: 0 0 auto;
-      min-width: max-content;
+      min-width: 0;
+      width: 100%;
+      overflow: visible;
       white-space: nowrap;
-      font-size: 10px;
+      font-size: clamp(8px, .75vw, 9px);
       font-weight: 950;
-      letter-spacing: .1em;
-      line-height: 1;
+      letter-spacing: .045em;
+      line-height: 1.2;
     }
     .action-key {
       display: inline-grid;

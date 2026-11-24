@@ -28,4 +28,4 @@ assert.match(player, /href="\/chess" aria-current=\{isChess \? "page" : undefine
 assert.match(player, /\.game-switcher a\[aria-current="page"\]/, "The current game needs a visible active state");
 assert.match(player, /@media \(max-width: 600px\)[\s\S]*\.game-switcher a \{ flex: 1 1 0;/, "Chess player switcher must fit mobile widths");
 
-console.log("Three-game switcher: 12 assertions passed");
+console.log("Three-game switcher: 16 assertions passed");
